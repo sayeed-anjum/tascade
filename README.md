@@ -33,3 +33,27 @@ Optional overrides:
 
 - `TASCADE_DB_MIGRATIONS_DIR`: directory containing ordered `*.sql` migrations.
 - `TASCADE_DB_MIGRATION_SQL`: run a single SQL file instead of directory discovery.
+
+## MCP server
+
+An MCP server is available for agent setup + execution orchestration:
+
+```bash
+python -m app.mcp_server
+```
+
+Available tools:
+
+- `create_project`
+- `create_phase`
+- `create_milestone`
+- `create_task`
+- `create_dependency`
+- `list_ready_tasks`
+- `claim_task`
+- `heartbeat_task`
+- `assign_task`
+- `create_plan_changeset`
+- `apply_plan_changeset`
+- `get_task_context`
+- `get_project_graph`

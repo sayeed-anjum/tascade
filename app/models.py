@@ -90,6 +90,35 @@ class ProjectModel(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
 
 
+class PhaseModel(Base):
+    __tablename__ = "phase"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+
+
+class MilestoneModel(Base):
+    __tablename__ = "milestone"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    phase_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("phase.id", ondelete="SET NULL"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+
+
 class TaskModel(Base):
     __tablename__ = "task"
 

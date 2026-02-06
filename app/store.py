@@ -13,6 +13,8 @@ from app.models import (
     DependencyEdgeModel,
     LeaseModel,
     LeaseStatus,
+    MilestoneModel,
+    PhaseModel,
     PlanChangeSetModel,
     PlanChangeSetStatus,
     PlanVersionModel,
@@ -73,6 +75,29 @@ def _task_to_dict(model: TaskModel) -> dict[str, Any]:
         "introduced_in_plan_version": model.introduced_in_plan_version,
         "deprecated_in_plan_version": model.deprecated_in_plan_version,
         "version": model.version,
+        "created_at": _iso(model.created_at),
+        "updated_at": _iso(model.updated_at),
+    }
+
+
+def _phase_to_dict(model: PhaseModel) -> dict[str, Any]:
+    return {
+        "id": model.id,
+        "project_id": model.project_id,
+        "name": model.name,
+        "sequence": model.sequence,
+        "created_at": _iso(model.created_at),
+        "updated_at": _iso(model.updated_at),
+    }
+
+
+def _milestone_to_dict(model: MilestoneModel) -> dict[str, Any]:
+    return {
+        "id": model.id,
+        "project_id": model.project_id,
+        "phase_id": model.phase_id,
+        "name": model.name,
+        "sequence": model.sequence,
         "created_at": _iso(model.created_at),
         "updated_at": _iso(model.updated_at),
     }
@@ -193,6 +218,31 @@ class SqlStore:
             session.flush()
             return _project_to_dict(project)
 
+    def create_phase(self, project_id: str, name: str, sequence: int) -> dict[str, Any]:
+        with SessionLocal.begin() as session:
+            phase = PhaseModel(project_id=project_id, name=name, sequence=sequence)
+            session.add(phase)
+            session.flush()
+            return _phase_to_dict(phase)
+
+    def create_milestone(
+        self,
+        project_id: str,
+        name: str,
+        sequence: int,
+        phase_id: str | None = None,
+    ) -> dict[str, Any]:
+        with SessionLocal.begin() as session:
+            milestone = MilestoneModel(
+                project_id=project_id,
+                phase_id=phase_id,
+                name=name,
+                sequence=sequence,
+            )
+            session.add(milestone)
+            session.flush()
+            return _milestone_to_dict(milestone)
+
     def create_task(self, payload: dict[str, Any]) -> dict[str, Any]:
         with SessionLocal.begin() as session:
             task = TaskModel(
@@ -255,6 +305,103 @@ class SqlStore:
             session.add(edge)
             session.flush()
             return _dependency_to_dict(edge)
+
+    def get_project_graph(self, project_id: str, include_completed: bool = True) -> dict[str, Any]:
+        with SessionLocal() as session:
+            project = session.get(ProjectModel, project_id)
+            if project is None:
+                raise KeyError("PROJECT_NOT_FOUND")
+
+            phases = session.execute(
+                select(PhaseModel).where(PhaseModel.project_id == project_id).order_by(PhaseModel.sequence)
+            ).scalars().all()
+            milestones = session.execute(
+                select(MilestoneModel)
+                .where(MilestoneModel.project_id == project_id)
+                .order_by(MilestoneModel.sequence)
+            ).scalars().all()
+            tasks = session.execute(
+                select(TaskModel).where(TaskModel.project_id == project_id)
+            ).scalars().all()
+            dependencies = session.execute(
+                select(DependencyEdgeModel).where(DependencyEdgeModel.project_id == project_id)
+            ).scalars().all()
+
+            task_items = [_task_to_dict(task) for task in tasks]
+            if not include_completed:
+                done_states = {TaskState.INTEGRATED.value, TaskState.ABANDONED.value, TaskState.CANCELLED.value}
+                task_items = [task for task in task_items if task["state"] not in done_states]
+                visible_task_ids = {task["id"] for task in task_items}
+                dependency_items = [
+                    _dependency_to_dict(edge)
+                    for edge in dependencies
+                    if edge.from_task_id in visible_task_ids and edge.to_task_id in visible_task_ids
+                ]
+            else:
+                dependency_items = [_dependency_to_dict(edge) for edge in dependencies]
+
+            return {
+                "project": _project_to_dict(project),
+                "phases": [_phase_to_dict(phase) for phase in phases],
+                "milestones": [_milestone_to_dict(milestone) for milestone in milestones],
+                "tasks": task_items,
+                "dependencies": dependency_items,
+            }
+
+    def get_task_context(
+        self,
+        project_id: str,
+        task_id: str,
+        ancestor_depth: int = 1,
+        dependent_depth: int = 1,
+    ) -> dict[str, Any]:
+        with SessionLocal() as session:
+            task = session.get(TaskModel, task_id)
+            if task is None or task.project_id != project_id:
+                raise KeyError("TASK_NOT_FOUND")
+
+            parent_map: dict[str, list[str]] = {}
+            child_map: dict[str, list[str]] = {}
+            edges = session.execute(
+                select(DependencyEdgeModel).where(DependencyEdgeModel.project_id == project_id)
+            ).scalars().all()
+            for edge in edges:
+                parent_map.setdefault(edge.to_task_id, []).append(edge.from_task_id)
+                child_map.setdefault(edge.from_task_id, []).append(edge.to_task_id)
+
+            def _walk(start: str, graph: dict[str, list[str]], max_depth: int) -> list[dict[str, Any]]:
+                if max_depth <= 0:
+                    return []
+                seen: set[str] = set()
+                frontier = [(start, 0)]
+                out: list[dict[str, Any]] = []
+                while frontier:
+                    node, depth = frontier.pop(0)
+                    if depth >= max_depth:
+                        continue
+                    for neighbor in graph.get(node, []):
+                        if neighbor in seen:
+                            continue
+                        seen.add(neighbor)
+                        neighbor_task = session.get(TaskModel, neighbor)
+                        if neighbor_task is None:
+                            continue
+                        out.append(
+                            {
+                                "id": neighbor_task.id,
+                                "title": neighbor_task.title,
+                                "state": neighbor_task.state.value,
+                                "depth": depth + 1,
+                            }
+                        )
+                        frontier.append((neighbor, depth + 1))
+                return out
+
+            return {
+                "task": _task_to_dict(task),
+                "ancestors": _walk(task_id, parent_map, ancestor_depth),
+                "dependents": _walk(task_id, child_map, dependent_depth),
+            }
 
     def _active_lease_for_task(self, session, task_id: str) -> LeaseModel | None:
         row = session.execute(
