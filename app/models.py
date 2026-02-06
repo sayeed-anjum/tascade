@@ -80,6 +80,10 @@ class PlanChangeSetStatus(str, Enum):
 UUID_TEXT = Uuid(as_uuid=False)
 
 
+def _enum_values(enum_cls):
+    return [member.value for member in enum_cls]
+
+
 class ProjectModel(Base):
     __tablename__ = "project"
 
@@ -87,7 +91,7 @@ class ProjectModel(Base):
     org_id: Mapped[str | None] = mapped_column(UUID_TEXT, nullable=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[ProjectStatus] = mapped_column(
-        SAEnum(ProjectStatus), nullable=False, default=ProjectStatus.ACTIVE
+        SAEnum(ProjectStatus, values_callable=_enum_values), nullable=False, default=ProjectStatus.ACTIVE
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
@@ -133,10 +137,14 @@ class TaskModel(Base):
     milestone_id: Mapped[str | None] = mapped_column(UUID_TEXT, nullable=True)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    state: Mapped[TaskState] = mapped_column(SAEnum(TaskState), nullable=False, default=TaskState.BACKLOG)
+    state: Mapped[TaskState] = mapped_column(
+        SAEnum(TaskState, values_callable=_enum_values), nullable=False, default=TaskState.BACKLOG
+    )
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
     work_spec: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    task_class: Mapped[TaskClass] = mapped_column(SAEnum(TaskClass), nullable=False, default=TaskClass.OTHER)
+    task_class: Mapped[TaskClass] = mapped_column(
+        SAEnum(TaskClass, values_callable=_enum_values), nullable=False, default=TaskClass.OTHER
+    )
     capability_tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     expected_touches: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     exclusive_paths: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
@@ -162,7 +170,7 @@ class DependencyEdgeModel(Base):
         UUID_TEXT, ForeignKey("task.id", ondelete="CASCADE"), nullable=False
     )
     unlock_on: Mapped[UnlockOnState] = mapped_column(
-        SAEnum(UnlockOnState), nullable=False, default=UnlockOnState.INTEGRATED
+        SAEnum(UnlockOnState, values_callable=_enum_values), nullable=False, default=UnlockOnState.INTEGRATED
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
 
@@ -179,7 +187,9 @@ class LeaseModel(Base):
     )
     agent_id: Mapped[str] = mapped_column(Text, nullable=False)
     token: Mapped[str] = mapped_column(String(36), nullable=False, unique=True)
-    status: Mapped[LeaseStatus] = mapped_column(SAEnum(LeaseStatus), nullable=False, default=LeaseStatus.ACTIVE)
+    status: Mapped[LeaseStatus] = mapped_column(
+        SAEnum(LeaseStatus, values_callable=_enum_values), nullable=False, default=LeaseStatus.ACTIVE
+    )
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     heartbeat_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
     fencing_counter: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
@@ -200,7 +210,7 @@ class TaskReservationModel(Base):
     assignee_agent_id: Mapped[str] = mapped_column(Text, nullable=False)
     mode: Mapped[str] = mapped_column(Text, nullable=False, default="hard")
     status: Mapped[ReservationStatus] = mapped_column(
-        SAEnum(ReservationStatus), nullable=False, default=ReservationStatus.ACTIVE
+        SAEnum(ReservationStatus, values_callable=_enum_values), nullable=False, default=ReservationStatus.ACTIVE
     )
     ttl_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=1800)
     created_by: Mapped[str] = mapped_column(Text, nullable=False)
@@ -233,7 +243,9 @@ class PlanChangeSetModel(Base):
     base_plan_version: Mapped[int] = mapped_column(Integer, nullable=False)
     target_plan_version: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[PlanChangeSetStatus] = mapped_column(
-        SAEnum(PlanChangeSetStatus), nullable=False, default=PlanChangeSetStatus.DRAFT
+        SAEnum(PlanChangeSetStatus, values_callable=_enum_values),
+        nullable=False,
+        default=PlanChangeSetStatus.DRAFT,
     )
     operations: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
     impact_preview: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
