@@ -1,0 +1,230 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from enum import Enum
+from uuid import uuid4
+
+from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+def _new_id() -> str:
+    return str(uuid4())
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class ProjectStatus(str, Enum):
+    ACTIVE = "active"
+    PAUSED = "paused"
+    ARCHIVED = "archived"
+
+
+class TaskState(str, Enum):
+    BACKLOG = "backlog"
+    READY = "ready"
+    RESERVED = "reserved"
+    CLAIMED = "claimed"
+    IN_PROGRESS = "in_progress"
+    IMPLEMENTED = "implemented"
+    INTEGRATED = "integrated"
+    CONFLICT = "conflict"
+    BLOCKED = "blocked"
+    ABANDONED = "abandoned"
+    CANCELLED = "cancelled"
+
+
+class UnlockOnState(str, Enum):
+    IMPLEMENTED = "implemented"
+    INTEGRATED = "integrated"
+
+
+class TaskClass(str, Enum):
+    ARCHITECTURE = "architecture"
+    DB_SCHEMA = "db_schema"
+    SECURITY = "security"
+    CROSS_CUTTING = "cross_cutting"
+    FRONTEND = "frontend"
+    BACKEND = "backend"
+    CRUD = "crud"
+    OTHER = "other"
+
+
+class LeaseStatus(str, Enum):
+    ACTIVE = "active"
+    EXPIRED = "expired"
+    RELEASED = "released"
+    CONSUMED = "consumed"
+
+
+class ReservationStatus(str, Enum):
+    ACTIVE = "active"
+    EXPIRED = "expired"
+    RELEASED = "released"
+    CONSUMED = "consumed"
+
+
+class PlanChangeSetStatus(str, Enum):
+    DRAFT = "draft"
+    VALIDATED = "validated"
+    APPLIED = "applied"
+    REJECTED = "rejected"
+
+
+class ProjectModel(Base):
+    __tablename__ = "project"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    org_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[ProjectStatus] = mapped_column(
+        SAEnum(ProjectStatus), nullable=False, default=ProjectStatus.ACTIVE
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+
+
+class TaskModel(Base):
+    __tablename__ = "task"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    phase_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    milestone_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    state: Mapped[TaskState] = mapped_column(SAEnum(TaskState), nullable=False, default=TaskState.BACKLOG)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+    work_spec: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    task_class: Mapped[TaskClass] = mapped_column(SAEnum(TaskClass), nullable=False, default=TaskClass.OTHER)
+    capability_tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    expected_touches: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    exclusive_paths: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    shared_paths: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    introduced_in_plan_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    deprecated_in_plan_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+
+
+class DependencyEdgeModel(Base):
+    __tablename__ = "dependency_edge"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    from_task_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("task.id", ondelete="CASCADE"), nullable=False
+    )
+    to_task_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("task.id", ondelete="CASCADE"), nullable=False
+    )
+    unlock_on: Mapped[UnlockOnState] = mapped_column(
+        SAEnum(UnlockOnState), nullable=False, default=UnlockOnState.INTEGRATED
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+
+
+class LeaseModel(Base):
+    __tablename__ = "lease"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    task_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("task.id", ondelete="CASCADE"), nullable=False
+    )
+    agent_id: Mapped[str] = mapped_column(Text, nullable=False)
+    token: Mapped[str] = mapped_column(String(36), nullable=False, unique=True)
+    status: Mapped[LeaseStatus] = mapped_column(SAEnum(LeaseStatus), nullable=False, default=LeaseStatus.ACTIVE)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    heartbeat_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    fencing_counter: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    released_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class TaskReservationModel(Base):
+    __tablename__ = "task_reservation"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    task_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("task.id", ondelete="CASCADE"), nullable=False
+    )
+    assignee_agent_id: Mapped[str] = mapped_column(Text, nullable=False)
+    mode: Mapped[str] = mapped_column(Text, nullable=False, default="hard")
+    status: Mapped[ReservationStatus] = mapped_column(
+        SAEnum(ReservationStatus), nullable=False, default=ReservationStatus.ACTIVE
+    )
+    ttl_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=1800)
+    created_by: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    released_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PlanVersionModel(Base):
+    __tablename__ = "plan_version"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    change_set_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+
+class PlanChangeSetModel(Base):
+    __tablename__ = "plan_change_set"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    base_plan_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    target_plan_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[PlanChangeSetStatus] = mapped_column(
+        SAEnum(PlanChangeSetStatus), nullable=False, default=PlanChangeSetStatus.DRAFT
+    )
+    operations: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    impact_preview: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_by: Mapped[str] = mapped_column(Text, nullable=False)
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class TaskExecutionSnapshotModel(Base):
+    __tablename__ = "task_execution_snapshot"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    task_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("task.id", ondelete="CASCADE"), nullable=False
+    )
+    lease_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("lease.id", ondelete="RESTRICT"), nullable=False, unique=True
+    )
+    captured_plan_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    work_spec_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    work_spec_payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    captured_by: Mapped[str] = mapped_column(Text, nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
