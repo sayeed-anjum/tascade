@@ -1,3 +1,5 @@
+import json
+
 from app import mcp_tools
 from app.mcp_server import MCP_TOOL_NAMES, create_mcp_server
 
@@ -142,3 +144,18 @@ def test_mcp_tool_contract_contains_setup_and_execution_tools():
 def test_mcp_server_constructs():
     server = create_mcp_server()
     assert server is not None
+
+
+def test_mcp_wrapped_tool_reports_domain_code():
+    server = create_mcp_server()
+    wrapped = server._tool_manager.get_tool("create_phase").fn
+    try:
+        wrapped(
+            project_id="00000000-0000-0000-0000-000000000000",
+            name="missing",
+            sequence=0,
+        )
+        raise AssertionError("Expected RuntimeError")
+    except RuntimeError as exc:
+        payload = json.loads(str(exc))
+    assert payload["error"]["code"] == "PROJECT_NOT_FOUND"
