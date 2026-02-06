@@ -9,6 +9,17 @@ def create_project(name: str) -> dict[str, Any]:
     return STORE.create_project(name=name)
 
 
+def get_project(project_id: str) -> dict[str, Any]:
+    project = STORE.get_project(project_id)
+    if project is None:
+        raise KeyError("PROJECT_NOT_FOUND")
+    return project
+
+
+def list_projects() -> dict[str, Any]:
+    return {"items": STORE.list_projects()}
+
+
 def create_phase(project_id: str, name: str, sequence: int) -> dict[str, Any]:
     if not STORE.project_exists(project_id):
         raise KeyError("PROJECT_NOT_FOUND")
@@ -63,6 +74,13 @@ def create_task(
         "milestone_id": milestone_id,
     }
     return STORE.create_task(payload)
+
+
+def get_task(task_id: str) -> dict[str, Any]:
+    task = STORE.get_task(task_id)
+    if task is None:
+        raise KeyError("TASK_NOT_FOUND")
+    return task
 
 
 def create_dependency(

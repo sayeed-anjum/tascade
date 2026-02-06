@@ -45,9 +45,12 @@ python -m app.mcp_server
 Available tools:
 
 - `create_project`
+- `get_project`
+- `list_projects`
 - `create_phase`
 - `create_milestone`
 - `create_task`
+- `get_task`
 - `create_dependency`
 - `list_ready_tasks`
 - `claim_task`

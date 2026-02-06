@@ -218,6 +218,20 @@ class SqlStore:
             session.flush()
             return _project_to_dict(project)
 
+    def get_project(self, project_id: str) -> dict[str, Any] | None:
+        with SessionLocal() as session:
+            project = session.get(ProjectModel, project_id)
+            if project is None:
+                return None
+            return _project_to_dict(project)
+
+    def list_projects(self) -> list[dict[str, Any]]:
+        with SessionLocal() as session:
+            projects = session.execute(
+                select(ProjectModel).order_by(ProjectModel.created_at.desc())
+            ).scalars().all()
+            return [_project_to_dict(project) for project in projects]
+
     def create_phase(self, project_id: str, name: str, sequence: int) -> dict[str, Any]:
         with SessionLocal.begin() as session:
             phase = PhaseModel(project_id=project_id, name=name, sequence=sequence)

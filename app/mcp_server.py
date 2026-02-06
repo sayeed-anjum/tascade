@@ -12,9 +12,12 @@ from app import mcp_tools
 
 MCP_TOOL_NAMES = [
     "create_project",
+    "get_project",
+    "list_projects",
     "create_phase",
     "create_milestone",
     "create_task",
+    "get_task",
     "create_dependency",
     "list_ready_tasks",
     "claim_task",
@@ -91,9 +94,12 @@ def create_mcp_server():
     server = FastMCP("tascade")
 
     server.tool(name="create_project")(_wrap_tool(mcp_tools.create_project))
+    server.tool(name="get_project")(_wrap_tool(mcp_tools.get_project))
+    server.tool(name="list_projects")(_wrap_tool(mcp_tools.list_projects))
     server.tool(name="create_phase")(_wrap_tool(mcp_tools.create_phase))
     server.tool(name="create_milestone")(_wrap_tool(mcp_tools.create_milestone))
     server.tool(name="create_task")(_wrap_tool(mcp_tools.create_task))
+    server.tool(name="get_task")(_wrap_tool(mcp_tools.get_task))
     server.tool(name="create_dependency")(_wrap_tool(mcp_tools.create_dependency))
     server.tool(name="list_ready_tasks")(_wrap_tool(mcp_tools.list_ready_tasks))
     server.tool(name="claim_task")(_wrap_tool(mcp_tools.claim_task))

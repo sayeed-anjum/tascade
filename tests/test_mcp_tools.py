@@ -122,12 +122,39 @@ def test_mcp_task_context_returns_ancestors_and_dependents():
     assert task_c["id"] in dependent_ids
 
 
+def test_mcp_read_tools_get_project_list_projects_and_get_task():
+    created_a = mcp_tools.create_project(name="read-proj-a")
+    created_b = mcp_tools.create_project(name="read-proj-b")
+
+    fetched = mcp_tools.get_project(project_id=created_a["id"])
+    assert fetched["id"] == created_a["id"]
+    assert fetched["name"] == "read-proj-a"
+
+    listed = mcp_tools.list_projects()
+    listed_ids = {item["id"] for item in listed["items"]}
+    assert created_a["id"] in listed_ids
+    assert created_b["id"] in listed_ids
+
+    task = mcp_tools.create_task(
+        project_id=created_a["id"],
+        title="Read Task",
+        task_class="backend",
+        work_spec=_work_spec("Read Task"),
+    )
+    fetched_task = mcp_tools.get_task(task_id=task["id"])
+    assert fetched_task["id"] == task["id"]
+    assert fetched_task["project_id"] == created_a["id"]
+
+
 def test_mcp_tool_contract_contains_setup_and_execution_tools():
     required = {
         "create_project",
+        "get_project",
+        "list_projects",
         "create_phase",
         "create_milestone",
         "create_task",
+        "get_task",
         "create_dependency",
         "list_ready_tasks",
         "claim_task",
