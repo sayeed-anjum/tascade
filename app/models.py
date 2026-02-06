@@ -5,6 +5,7 @@ from enum import Enum
 from uuid import uuid4
 
 from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Integer, JSON, String, Text, Uuid
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -78,6 +79,7 @@ class PlanChangeSetStatus(str, Enum):
 
 
 UUID_TEXT = Uuid(as_uuid=False)
+TEXT_LIST = JSON().with_variant(ARRAY(Text), "postgresql")
 
 
 def _enum_values(enum_cls):
@@ -145,10 +147,10 @@ class TaskModel(Base):
     task_class: Mapped[TaskClass] = mapped_column(
         SAEnum(TaskClass, values_callable=_enum_values), nullable=False, default=TaskClass.OTHER
     )
-    capability_tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    expected_touches: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    exclusive_paths: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    shared_paths: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    capability_tags: Mapped[list[str]] = mapped_column(TEXT_LIST, nullable=False, default=list)
+    expected_touches: Mapped[list[str]] = mapped_column(TEXT_LIST, nullable=False, default=list)
+    exclusive_paths: Mapped[list[str]] = mapped_column(TEXT_LIST, nullable=False, default=list)
+    shared_paths: Mapped[list[str]] = mapped_column(TEXT_LIST, nullable=False, default=list)
     introduced_in_plan_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     deprecated_in_plan_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

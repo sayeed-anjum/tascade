@@ -72,6 +72,7 @@ jobs:
         run: |
           createdb --host localhost --username postgres tascade_migrations
           createdb --host localhost --username postgres tascade_smoke
+          createdb --host localhost --username postgres tascade_mcp_smoke
 
       - name: Validate SQL migration with psql
         run: |
@@ -84,3 +85,9 @@ jobs:
           TASCADE_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/tascade_smoke
         run: |
           python scripts/postgres_smoke.py
+
+      - name: Run MCP smoke test against PostgreSQL
+        env:
+          TASCADE_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/tascade_mcp_smoke
+        run: |
+          python scripts/postgres_mcp_smoke.py
