@@ -17,7 +17,7 @@ pytest -q
 
 ```bash
 export TASCADE_DATABASE_URL='postgresql+psycopg://postgres:postgres@localhost:5432/tascade'
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8010
 ```
 
 If `TASCADE_DATABASE_URL` is not set, the app defaults to:

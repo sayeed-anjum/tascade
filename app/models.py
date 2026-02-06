@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Integer, JSON, String, Text, Uuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -77,11 +77,14 @@ class PlanChangeSetStatus(str, Enum):
     REJECTED = "rejected"
 
 
+UUID_TEXT = Uuid(as_uuid=False)
+
+
 class ProjectModel(Base):
     __tablename__ = "project"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
-    org_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
+    org_id: Mapped[str | None] = mapped_column(UUID_TEXT, nullable=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[ProjectStatus] = mapped_column(
         SAEnum(ProjectStatus), nullable=False, default=ProjectStatus.ACTIVE
@@ -93,9 +96,9 @@ class ProjectModel(Base):
 class PhaseModel(Base):
     __tablename__ = "phase"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
     project_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -106,12 +109,12 @@ class PhaseModel(Base):
 class MilestoneModel(Base):
     __tablename__ = "milestone"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
     project_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
     )
     phase_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("phase.id", ondelete="SET NULL"), nullable=True
+        UUID_TEXT, ForeignKey("phase.id", ondelete="SET NULL"), nullable=True
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -122,12 +125,12 @@ class MilestoneModel(Base):
 class TaskModel(Base):
     __tablename__ = "task"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
     project_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
     )
-    phase_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    milestone_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    phase_id: Mapped[str | None] = mapped_column(UUID_TEXT, nullable=True)
+    milestone_id: Mapped[str | None] = mapped_column(UUID_TEXT, nullable=True)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     state: Mapped[TaskState] = mapped_column(SAEnum(TaskState), nullable=False, default=TaskState.BACKLOG)
@@ -148,15 +151,15 @@ class TaskModel(Base):
 class DependencyEdgeModel(Base):
     __tablename__ = "dependency_edge"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
     project_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
     )
     from_task_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("task.id", ondelete="CASCADE"), nullable=False
+        UUID_TEXT, ForeignKey("task.id", ondelete="CASCADE"), nullable=False
     )
     to_task_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("task.id", ondelete="CASCADE"), nullable=False
+        UUID_TEXT, ForeignKey("task.id", ondelete="CASCADE"), nullable=False
     )
     unlock_on: Mapped[UnlockOnState] = mapped_column(
         SAEnum(UnlockOnState), nullable=False, default=UnlockOnState.INTEGRATED
@@ -167,12 +170,12 @@ class DependencyEdgeModel(Base):
 class LeaseModel(Base):
     __tablename__ = "lease"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
     project_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
     )
     task_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("task.id", ondelete="CASCADE"), nullable=False
+        UUID_TEXT, ForeignKey("task.id", ondelete="CASCADE"), nullable=False
     )
     agent_id: Mapped[str] = mapped_column(Text, nullable=False)
     token: Mapped[str] = mapped_column(String(36), nullable=False, unique=True)
@@ -187,12 +190,12 @@ class LeaseModel(Base):
 class TaskReservationModel(Base):
     __tablename__ = "task_reservation"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
     project_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
     )
     task_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("task.id", ondelete="CASCADE"), nullable=False
+        UUID_TEXT, ForeignKey("task.id", ondelete="CASCADE"), nullable=False
     )
     assignee_agent_id: Mapped[str] = mapped_column(Text, nullable=False)
     mode: Mapped[str] = mapped_column(Text, nullable=False, default="hard")
@@ -209,12 +212,12 @@ class TaskReservationModel(Base):
 class PlanVersionModel(Base):
     __tablename__ = "plan_version"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
     project_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
     )
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    change_set_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    change_set_id: Mapped[str | None] = mapped_column(UUID_TEXT, nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
@@ -223,9 +226,9 @@ class PlanVersionModel(Base):
 class PlanChangeSetModel(Base):
     __tablename__ = "plan_change_set"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
     project_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
     )
     base_plan_version: Mapped[int] = mapped_column(Integer, nullable=False)
     target_plan_version: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -242,15 +245,15 @@ class PlanChangeSetModel(Base):
 class TaskExecutionSnapshotModel(Base):
     __tablename__ = "task_execution_snapshot"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
     project_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
     )
     task_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("task.id", ondelete="CASCADE"), nullable=False
+        UUID_TEXT, ForeignKey("task.id", ondelete="CASCADE"), nullable=False
     )
     lease_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("lease.id", ondelete="RESTRICT"), nullable=False, unique=True
+        UUID_TEXT, ForeignKey("lease.id", ondelete="RESTRICT"), nullable=False, unique=True
     )
     captured_plan_version: Mapped[int] = mapped_column(Integer, nullable=False)
     work_spec_hash: Mapped[str] = mapped_column(Text, nullable=False)

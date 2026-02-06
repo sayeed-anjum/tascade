@@ -1,5 +1,5 @@
 from app import mcp_tools
-from app.mcp_server import MCP_TOOL_NAMES
+from app.mcp_server import MCP_TOOL_NAMES, create_mcp_server
 
 
 def _work_spec(title: str) -> dict:
@@ -137,3 +137,8 @@ def test_mcp_tool_contract_contains_setup_and_execution_tools():
         "get_project_graph",
     }
     assert required.issubset(set(MCP_TOOL_NAMES))
+
+
+def test_mcp_server_constructs():
+    server = create_mcp_server()
+    assert server is not None
