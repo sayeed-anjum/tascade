@@ -110,11 +110,29 @@ def _is_sqlite_url(url: str) -> bool:
     return url.startswith("sqlite")
 
 
-def _migration_sql_path() -> Path:
-    configured = os.getenv("TASCADE_DB_MIGRATION_SQL")
+def _migrations_dir() -> Path:
+    configured = os.getenv("TASCADE_DB_MIGRATIONS_DIR")
     if configured:
         return Path(configured).expanduser().resolve()
-    return Path(__file__).resolve().parents[1] / "docs" / "db" / "migrations" / "0001_init.sql"
+    return Path(__file__).resolve().parents[1] / "docs" / "db" / "migrations"
+
+
+def _migration_sql_files() -> list[Path]:
+    single = os.getenv("TASCADE_DB_MIGRATION_SQL")
+    if single:
+        migration_file = Path(single).expanduser().resolve()
+        if not migration_file.is_file():
+            raise RuntimeError(f"Migration SQL file not found: {migration_file}")
+        return [migration_file]
+
+    migrations_dir = _migrations_dir()
+    if not migrations_dir.is_dir():
+        raise RuntimeError(f"Migrations directory not found: {migrations_dir}")
+
+    migration_files = sorted(path.resolve() for path in migrations_dir.glob("*.sql"))
+    if not migration_files:
+        raise RuntimeError(f"No SQL migration files found in: {migrations_dir}")
+    return migration_files
 
 
 def _postgres_conninfo_for_psql(database_url: str) -> str:
@@ -125,21 +143,103 @@ def _postgres_conninfo_for_psql(database_url: str) -> str:
     return conninfo.render_as_string(hide_password=False)
 
 
-def _run_postgres_migrations(engine: Engine) -> None:
-    del engine
-    migration_sql = _migration_sql_path()
-    if not migration_sql.is_file():
-        raise RuntimeError(f"Migration SQL file not found: {migration_sql}")
-
-    conninfo = _postgres_conninfo_for_psql(DATABASE_URL)
-    command = ["psql", conninfo, "-v", "ON_ERROR_STOP=1", "-f", str(migration_sql)]
+def _run_psql(command: list[str]) -> subprocess.CompletedProcess[str]:
     try:
-        subprocess.run(command, check=True, capture_output=True, text=True)
+        return subprocess.run(command, check=True, capture_output=True, text=True)
     except FileNotFoundError as exc:
         raise RuntimeError("psql is required to initialize PostgreSQL schema") from exc
     except subprocess.CalledProcessError as exc:
         stderr = (exc.stderr or "").strip()
         raise RuntimeError(f"Postgres migration failed: {stderr}") from exc
+
+
+def _ensure_schema_migrations_table(conninfo: str) -> None:
+    _run_psql(
+        [
+            "psql",
+            conninfo,
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-c",
+            (
+                "CREATE TABLE IF NOT EXISTS schema_migrations ("
+                "version TEXT PRIMARY KEY, "
+                "applied_at TIMESTAMPTZ NOT NULL DEFAULT now()"
+                ")"
+            ),
+        ]
+    )
+
+
+def _applied_migration_versions(conninfo: str) -> set[str]:
+    result = _run_psql(
+        [
+            "psql",
+            conninfo,
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-t",
+            "-A",
+            "-c",
+            "SELECT version FROM schema_migrations ORDER BY version",
+        ]
+    )
+    return {line.strip() for line in (result.stdout or "").splitlines() if line.strip()}
+
+
+def _record_migration_version(conninfo: str, version: str) -> None:
+    escaped_version = version.replace("'", "''")
+    _run_psql(
+        [
+            "psql",
+            conninfo,
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-c",
+            (
+                "INSERT INTO schema_migrations (version) "
+                f"VALUES ('{escaped_version}') "
+                "ON CONFLICT (version) DO NOTHING"
+            ),
+        ]
+    )
+
+
+def _database_looks_initialized(engine: Engine) -> bool:
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+    return "project" in existing_tables
+
+
+def _run_postgres_migrations(engine: Engine) -> None:
+    migration_files = _migration_sql_files()
+    conninfo = _postgres_conninfo_for_psql(DATABASE_URL)
+    _ensure_schema_migrations_table(conninfo)
+    applied_versions = _applied_migration_versions(conninfo)
+
+    # Backfill tracking for legacy DBs initialized before schema_migrations existed.
+    # Only baseline the earliest migration, then apply remaining pending files.
+    if not applied_versions and _database_looks_initialized(engine):
+        baseline_version = migration_files[0].name
+        _record_migration_version(conninfo, baseline_version)
+        applied_versions.add(baseline_version)
+
+    for migration_file in migration_files:
+        version = migration_file.name
+        if version in applied_versions:
+            continue
+        _run_psql(
+            [
+                "psql",
+                conninfo,
+                "-v",
+                "ON_ERROR_STOP=1",
+                "-1",
+                "-f",
+                str(migration_file),
+            ]
+        )
+        _record_migration_version(conninfo, version)
 
 
 def verify_schema(engine: Engine, required: dict[str, set[str]] | None = None) -> None:

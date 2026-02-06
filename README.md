@@ -23,3 +23,13 @@ uvicorn app.main:app --reload
 If `TASCADE_DATABASE_URL` is not set, the app defaults to:
 
 `postgresql+psycopg://postgres:postgres@localhost:5432/tascade`
+
+## Migration bootstrap
+
+For PostgreSQL, app startup applies pending SQL files in `docs/db/migrations` and records them in
+`schema_migrations`. This makes restarts idempotent.
+
+Optional overrides:
+
+- `TASCADE_DB_MIGRATIONS_DIR`: directory containing ordered `*.sql` migrations.
+- `TASCADE_DB_MIGRATION_SQL`: run a single SQL file instead of directory discovery.
