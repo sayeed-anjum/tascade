@@ -3,6 +3,7 @@ from sqlalchemy import text
 
 from app.db import SessionLocal
 from app.main import app
+from app.store import STORE
 
 
 def test_api_writes_persist_in_sql_tables():
@@ -11,6 +12,13 @@ def test_api_writes_persist_in_sql_tables():
     project = client.post("/v1/projects", json={"name": "sql-proj"})
     assert project.status_code == 201
     project_id = project.json()["id"]
+    phase = STORE.create_phase(project_id=project_id, name="Phase 1", sequence=0)
+    milestone = STORE.create_milestone(
+        project_id=project_id,
+        name="Milestone 1",
+        sequence=0,
+        phase_id=phase["id"],
+    )
 
     task = client.post(
         "/v1/tasks",
@@ -22,6 +30,8 @@ def test_api_writes_persist_in_sql_tables():
                 "objective": "Verify DB persistence",
                 "acceptance_criteria": ["Task row exists in SQL table"],
             },
+            "phase_id": phase["id"],
+            "milestone_id": milestone["id"],
         },
     )
     assert task.status_code == 201

@@ -47,6 +47,10 @@ _DOMAIN_ERRORS: dict[str, tuple[str, bool]] = {
     "INVALID_STATE_TRANSITION": ("State transition is not allowed", False),
     "STATE_NOT_ALLOWED": ("Target state is not allowed via this operation", False),
     "INVALID_STATE": ("Unknown task state", False),
+    "PHASE_NOT_FOUND": ("Phase not found", False),
+    "MILESTONE_NOT_FOUND": ("Milestone not found", False),
+    "IDENTIFIER_PARENT_REQUIRED": ("Hierarchy parent is required for short-id generation", False),
+    "PHASE_MILESTONE_MISMATCH": ("Task phase and milestone phase must match", False),
 }
 
 

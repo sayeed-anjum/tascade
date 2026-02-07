@@ -3,6 +3,8 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.store import STORE
 
+_PROJECT_HIERARCHY: dict[str, tuple[str, str]] = {}
+
 
 def _create_project(client: TestClient, name: str = "proj-state") -> str:
     response = client.post("/v1/projects", json={"name": name})
@@ -11,6 +13,19 @@ def _create_project(client: TestClient, name: str = "proj-state") -> str:
 
 
 def _create_task(client: TestClient, project_id: str, title: str = "Stateful task") -> str:
+    phase_id, milestone_id = _PROJECT_HIERARCHY.get(project_id, (None, None))
+    if phase_id is None or milestone_id is None:
+        phase = STORE.create_phase(project_id=project_id, name="Phase 1", sequence=0)
+        milestone = STORE.create_milestone(
+            project_id=project_id,
+            name="Milestone 1",
+            sequence=0,
+            phase_id=phase["id"],
+        )
+        phase_id = phase["id"]
+        milestone_id = milestone["id"]
+        _PROJECT_HIERARCHY[project_id] = (phase_id, milestone_id)
+
     response = client.post(
         "/v1/tasks",
         json={
@@ -21,6 +36,8 @@ def _create_task(client: TestClient, project_id: str, title: str = "Stateful tas
                 "objective": f"Implement {title}",
                 "acceptance_criteria": [f"{title} complete"],
             },
+            "phase_id": phase_id,
+            "milestone_id": milestone_id,
         },
     )
     assert response.status_code == 201
@@ -190,9 +207,15 @@ def test_transition_releases_active_lease():
 
 def test_state_transition_emits_event_log_record():
     project = STORE.create_project("proj-event-log")
+    phase = STORE.create_phase(project_id=project["id"], name="Phase 1", sequence=0)
+    milestone = STORE.create_milestone(
+        project_id=project["id"], name="Milestone 1", sequence=0, phase_id=phase["id"]
+    )
     task = STORE.create_task(
         {
             "project_id": project["id"],
+            "phase_id": phase["id"],
+            "milestone_id": milestone["id"],
             "title": "eventful task",
             "task_class": "backend",
             "work_spec": {"objective": "x", "acceptance_criteria": ["y"]},

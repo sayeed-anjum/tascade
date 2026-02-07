@@ -1,6 +1,10 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.store import STORE
+
+
+_PROJECT_HIERARCHY: dict[str, tuple[str, str]] = {}
 
 
 def _create_project(client: TestClient, name: str = "proj-a") -> str:
@@ -10,6 +14,19 @@ def _create_project(client: TestClient, name: str = "proj-a") -> str:
 
 
 def _create_task(client: TestClient, project_id: str, title: str) -> str:
+    phase_id, milestone_id = _PROJECT_HIERARCHY.get(project_id, (None, None))
+    if phase_id is None or milestone_id is None:
+        phase = STORE.create_phase(project_id=project_id, name="Phase 1", sequence=0)
+        milestone = STORE.create_milestone(
+            project_id=project_id,
+            name="Milestone 1",
+            sequence=0,
+            phase_id=phase["id"],
+        )
+        phase_id = phase["id"]
+        milestone_id = milestone["id"]
+        _PROJECT_HIERARCHY[project_id] = (phase_id, milestone_id)
+
     payload = {
         "project_id": project_id,
         "title": title,
@@ -18,6 +35,8 @@ def _create_task(client: TestClient, project_id: str, title: str) -> str:
             "objective": f"Implement {title}",
             "acceptance_criteria": [f"{title} works"],
         },
+        "phase_id": phase_id,
+        "milestone_id": milestone_id,
     }
     response = client.post("/v1/tasks", json=payload)
     assert response.status_code == 201

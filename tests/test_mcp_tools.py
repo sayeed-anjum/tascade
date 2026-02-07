@@ -11,6 +11,17 @@ def _work_spec(title: str) -> dict:
     }
 
 
+def _create_hierarchy(project_id: str, suffix: str = "1") -> tuple[dict, dict]:
+    phase = mcp_tools.create_phase(project_id=project_id, name=f"Phase {suffix}", sequence=0)
+    milestone = mcp_tools.create_milestone(
+        project_id=project_id,
+        name=f"Milestone {suffix}",
+        sequence=0,
+        phase_id=phase["id"],
+    )
+    return phase, milestone
+
+
 def test_mcp_setup_and_execution_flow():
     project = mcp_tools.create_project(name="mcp-proj")
     project_id = project["id"]
@@ -84,24 +95,31 @@ def test_mcp_setup_and_execution_flow():
 def test_mcp_task_context_returns_ancestors_and_dependents():
     project = mcp_tools.create_project(name="context-proj")
     project_id = project["id"]
+    phase, milestone = _create_hierarchy(project_id, "Context")
 
     task_a = mcp_tools.create_task(
         project_id=project_id,
         title="Task A",
         task_class="backend",
         work_spec=_work_spec("Task A"),
+        phase_id=phase["id"],
+        milestone_id=milestone["id"],
     )
     task_b = mcp_tools.create_task(
         project_id=project_id,
         title="Task B",
         task_class="backend",
         work_spec=_work_spec("Task B"),
+        phase_id=phase["id"],
+        milestone_id=milestone["id"],
     )
     task_c = mcp_tools.create_task(
         project_id=project_id,
         title="Task C",
         task_class="backend",
         work_spec=_work_spec("Task C"),
+        phase_id=phase["id"],
+        milestone_id=milestone["id"],
     )
 
     mcp_tools.create_dependency(
@@ -132,6 +150,7 @@ def test_mcp_task_context_returns_ancestors_and_dependents():
 def test_mcp_read_tools_get_project_list_projects_and_get_task():
     created_a = mcp_tools.create_project(name="read-proj-a")
     created_b = mcp_tools.create_project(name="read-proj-b")
+    phase, milestone = _create_hierarchy(created_a["id"], "Read")
 
     fetched = mcp_tools.get_project(project_id=created_a["id"])
     assert fetched["id"] == created_a["id"]
@@ -147,6 +166,8 @@ def test_mcp_read_tools_get_project_list_projects_and_get_task():
         title="Read Task",
         task_class="backend",
         work_spec=_work_spec("Read Task"),
+        phase_id=phase["id"],
+        milestone_id=milestone["id"],
     )
     fetched_task = mcp_tools.get_task(task_id=task["id"])
     assert fetched_task["id"] == task["id"]
@@ -198,11 +219,14 @@ def test_mcp_wrapped_tool_reports_domain_code():
 
 def test_mcp_transition_task_state_tool():
     project = mcp_tools.create_project(name="mcp-transition-proj")
+    phase, milestone = _create_hierarchy(project["id"], "Transition")
     task = mcp_tools.create_task(
         project_id=project["id"],
         title="Transition me",
         task_class="backend",
         work_spec=_work_spec("Transition me"),
+        phase_id=phase["id"],
+        milestone_id=milestone["id"],
     )
     moved = mcp_tools.transition_task_state(
         task_id=task["id"],
@@ -243,3 +267,55 @@ def test_mcp_transition_task_state_tool():
         reason="review passed and merged",
     )
     assert integrated["task"]["state"] == "integrated"
+
+
+def test_mcp_create_milestone_requires_phase_id():
+    project = mcp_tools.create_project(name="strict-hierarchy-proj")
+    try:
+        mcp_tools.create_milestone(
+            project_id=project["id"],
+            name="Milestone without phase",
+            sequence=0,
+            phase_id=None,
+        )
+        raise AssertionError("Expected ValueError")
+    except ValueError as exc:
+        assert str(exc) == "IDENTIFIER_PARENT_REQUIRED"
+
+
+def test_mcp_create_task_requires_milestone_and_matching_phase():
+    project = mcp_tools.create_project(name="strict-task-hierarchy-proj")
+    phase_a = mcp_tools.create_phase(project_id=project["id"], name="Phase A", sequence=0)
+    phase_b = mcp_tools.create_phase(project_id=project["id"], name="Phase B", sequence=1)
+    milestone_a = mcp_tools.create_milestone(
+        project_id=project["id"],
+        name="Milestone A",
+        sequence=0,
+        phase_id=phase_a["id"],
+    )
+
+    try:
+        mcp_tools.create_task(
+            project_id=project["id"],
+            title="Missing milestone",
+            task_class="backend",
+            work_spec=_work_spec("Missing milestone"),
+            phase_id=phase_a["id"],
+            milestone_id=None,
+        )
+        raise AssertionError("Expected ValueError")
+    except ValueError as exc:
+        assert str(exc) == "IDENTIFIER_PARENT_REQUIRED"
+
+    try:
+        mcp_tools.create_task(
+            project_id=project["id"],
+            title="Phase mismatch task",
+            task_class="backend",
+            work_spec=_work_spec("Phase mismatch task"),
+            phase_id=phase_b["id"],
+            milestone_id=milestone_a["id"],
+        )
+        raise AssertionError("Expected ValueError")
+    except ValueError as exc:
+        assert str(exc) == "PHASE_MILESTONE_MISMATCH"

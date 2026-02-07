@@ -63,7 +63,39 @@ def create_task(payload: CreateTaskRequest) -> Task:
                 }
             ).model_dump(),
         )
-    task = STORE.create_task(payload.model_dump())
+    try:
+        task = STORE.create_task(payload.model_dump())
+    except KeyError as exc:
+        code = str(exc.args[0]) if exc.args else "INVARIANT_VIOLATION"
+        error_code = "MILESTONE_NOT_FOUND" if code == "MILESTONE_NOT_FOUND" else "INVARIANT_VIOLATION"
+        raise HTTPException(
+            status_code=404 if error_code == "MILESTONE_NOT_FOUND" else 409,
+            detail=ErrorResponse(
+                error={
+                    "code": error_code,
+                    "message": "Milestone not found" if error_code == "MILESTONE_NOT_FOUND" else "Invalid task hierarchy",
+                    "retryable": False,
+                }
+            ).model_dump(),
+        )
+    except ValueError as exc:
+        code = str(exc)
+        if code == "IDENTIFIER_PARENT_REQUIRED":
+            message = "Milestone hierarchy is required for short-id generation"
+        elif code == "PHASE_MILESTONE_MISMATCH":
+            message = "Task phase_id must match milestone phase_id"
+        else:
+            message = "Invalid task hierarchy"
+        raise HTTPException(
+            status_code=409,
+            detail=ErrorResponse(
+                error={
+                    "code": code,
+                    "message": message,
+                    "retryable": False,
+                }
+            ).model_dump(),
+        )
     return Task(**task)
 
 

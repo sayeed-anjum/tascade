@@ -34,6 +34,8 @@ def create_milestone(
 ) -> dict[str, Any]:
     if not STORE.project_exists(project_id):
         raise KeyError("PROJECT_NOT_FOUND")
+    if phase_id is None:
+        raise ValueError("IDENTIFIER_PARENT_REQUIRED")
     return STORE.create_milestone(
         project_id=project_id,
         name=name,

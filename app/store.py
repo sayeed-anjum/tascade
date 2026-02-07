@@ -290,21 +290,22 @@ class SqlStore:
         phase_id: str | None = None,
     ) -> dict[str, Any]:
         with SessionLocal.begin() as session:
+            if phase_id is None:
+                raise ValueError("IDENTIFIER_PARENT_REQUIRED")
             milestone_number: int | None = None
             short_id: str | None = None
-            if phase_id is not None:
-                phase = session.get(PhaseModel, phase_id)
-                if phase is None or phase.project_id != project_id:
-                    raise KeyError("PHASE_NOT_FOUND")
-                current_max = session.execute(
-                    select(func.max(MilestoneModel.milestone_number)).where(
-                        MilestoneModel.project_id == project_id,
-                        MilestoneModel.phase_id == phase_id,
-                    )
-                ).scalar_one()
-                milestone_number = int(current_max or 0) + 1
-                if phase.short_id:
-                    short_id = f"{phase.short_id}.M{milestone_number}"
+            phase = session.get(PhaseModel, phase_id)
+            if phase is None or phase.project_id != project_id:
+                raise KeyError("PHASE_NOT_FOUND")
+            current_max = session.execute(
+                select(func.max(MilestoneModel.milestone_number)).where(
+                    MilestoneModel.project_id == project_id,
+                    MilestoneModel.phase_id == phase_id,
+                )
+            ).scalar_one()
+            milestone_number = int(current_max or 0) + 1
+            if phase.short_id:
+                short_id = f"{phase.short_id}.M{milestone_number}"
             milestone = MilestoneModel(
                 project_id=project_id,
                 phase_id=phase_id,
@@ -320,24 +321,34 @@ class SqlStore:
     def create_task(self, payload: dict[str, Any]) -> dict[str, Any]:
         with SessionLocal.begin() as session:
             milestone_id = payload.get("milestone_id")
+            if milestone_id is None:
+                raise ValueError("IDENTIFIER_PARENT_REQUIRED")
             task_number: int | None = None
             short_id: str | None = None
-            if milestone_id is not None:
-                milestone = session.get(MilestoneModel, milestone_id)
-                if milestone is None or milestone.project_id != payload["project_id"]:
-                    raise KeyError("MILESTONE_NOT_FOUND")
-                current_max = session.execute(
-                    select(func.max(TaskModel.task_number)).where(
-                        TaskModel.project_id == payload["project_id"],
-                        TaskModel.milestone_id == milestone_id,
-                    )
-                ).scalar_one()
-                task_number = int(current_max or 0) + 1
-                if milestone.short_id:
-                    short_id = f"{milestone.short_id}.T{task_number}"
+            milestone = session.get(MilestoneModel, milestone_id)
+            if milestone is None or milestone.project_id != payload["project_id"]:
+                raise KeyError("MILESTONE_NOT_FOUND")
+            if milestone.phase_id is None:
+                raise ValueError("IDENTIFIER_PARENT_REQUIRED")
+
+            requested_phase_id = payload.get("phase_id")
+            if requested_phase_id is not None and requested_phase_id != milestone.phase_id:
+                raise ValueError("PHASE_MILESTONE_MISMATCH")
+
+            current_max = session.execute(
+                select(func.max(TaskModel.task_number)).where(
+                    TaskModel.project_id == payload["project_id"],
+                    TaskModel.milestone_id == milestone_id,
+                )
+            ).scalar_one()
+            task_number = int(current_max or 0) + 1
+            if milestone.short_id:
+                short_id = f"{milestone.short_id}.T{task_number}"
+
+            phase_id = requested_phase_id or milestone.phase_id
             task = TaskModel(
                 project_id=payload["project_id"],
-                phase_id=payload.get("phase_id"),
+                phase_id=phase_id,
                 milestone_id=milestone_id,
                 task_number=task_number,
                 short_id=short_id,
