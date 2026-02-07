@@ -8,7 +8,7 @@
 
 ## Role Scope
 
-This root `AGENTS.md` is the **orchestrator policy** for mainline/project-level coordination.
+This root `AGENTS.md` is the **orchestrator policy** for project-level coordination on the active integration branch.
 
 - Orchestrator scope:
   - planning and task routing across the project,
@@ -72,6 +72,25 @@ Any substantial work in this repository must have a corresponding Tascade task b
   - formatting/comment-only changes,
   - local exploratory debugging with no durable code changes.
 - If emergency work starts before task creation (for example incident mitigation), create and link the task immediately after stabilization in the same session, and record reason in transition notes.
+
+### Umbrella + Child Pattern (Recommended for multi-lane work)
+
+When work is split into 2+ independent lanes/worktrees, use:
+
+1. One umbrella task for overall objective and final integration status.
+2. One child task per lane/worktree with lane-specific scope and artifacts.
+3. Explicit linkage in task descriptions/reasons:
+   - child references umbrella short ID,
+   - umbrella lists child short IDs.
+
+Close-out model:
+
+- Child tasks: move through implementation lifecycle and publish lane artifacts.
+- Umbrella task: closes after all child lanes are merged, with aggregate integration artifact:
+  - base SHA
+  - final head SHA on the integration target branch (for example `main`, `dev`)
+  - included commit SHA list (or PR list)
+  - child task short ID list included in the merge set
 
 ## Task Close-out Checklist (Required)
 

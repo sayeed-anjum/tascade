@@ -7,6 +7,7 @@ This file defines task-local rules for subagents operating in isolated worktrees
 - Handle one assigned task at a time.
 - Focus on implementation, tests, and task artifacts.
 - Do not make project-wide governance decisions.
+- If working as a lane under an umbrella task, keep the child task reference visible in handoff notes.
 
 ## Required Input Context
 
