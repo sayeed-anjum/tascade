@@ -440,6 +440,7 @@ class SqlStore:
         actor_id: str,
         reason: str,
         reviewed_by: str | None = None,
+        review_evidence_refs: list[str] | None = None,
         force: bool = False,
     ) -> dict[str, Any]:
         with SessionLocal.begin() as session:
@@ -466,6 +467,9 @@ class SqlStore:
                 reviewer = (reviewed_by or "").strip()
                 if not reviewer:
                     raise ValueError("REVIEW_REQUIRED_FOR_INTEGRATION")
+                evidence_refs = [ref.strip() for ref in (review_evidence_refs or []) if ref and ref.strip()]
+                if not evidence_refs:
+                    raise ValueError("REVIEW_EVIDENCE_REQUIRED")
                 if reviewer == actor_id:
                     raise ValueError("SELF_REVIEW_NOT_ALLOWED")
 
@@ -487,6 +491,7 @@ class SqlStore:
                     "to_state": target.value,
                     "reason": reason,
                     "reviewed_by": reviewed_by,
+                    "review_evidence_refs": review_evidence_refs or [],
                     "force": force,
                 },
                 caused_by=actor_id,

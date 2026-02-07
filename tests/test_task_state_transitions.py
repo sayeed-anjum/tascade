@@ -80,6 +80,7 @@ def test_task_state_transition_happy_path_and_forced_transition():
             "new_state": "integrated",
             "actor_id": "lead-dev",
             "reviewed_by": "senior-reviewer",
+            "review_evidence_refs": ["review://thread/123"],
             "reason": "merge complete",
         },
     )
@@ -158,6 +159,19 @@ def test_integration_requires_reviewer_and_disallows_self_review():
     assert missing_review.status_code == 409
     assert missing_review.json()["error"]["code"] == "REVIEW_REQUIRED_FOR_INTEGRATION"
 
+    missing_evidence = client.post(
+        f"/v1/tasks/{task_id}/state",
+        json={
+            "project_id": project_id,
+            "new_state": "integrated",
+            "actor_id": "agent-dev",
+            "reviewed_by": "senior-reviewer",
+            "reason": "attempt integrate without review evidence",
+        },
+    )
+    assert missing_evidence.status_code == 409
+    assert missing_evidence.json()["error"]["code"] == "REVIEW_EVIDENCE_REQUIRED"
+
     self_review = client.post(
         f"/v1/tasks/{task_id}/state",
         json={
@@ -165,6 +179,7 @@ def test_integration_requires_reviewer_and_disallows_self_review():
             "new_state": "integrated",
             "actor_id": "agent-dev",
             "reviewed_by": "agent-dev",
+            "review_evidence_refs": ["review://thread/456"],
             "reason": "self approval is not allowed",
         },
     )

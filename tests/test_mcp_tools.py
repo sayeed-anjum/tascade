@@ -264,6 +264,7 @@ def test_mcp_transition_task_state_tool():
         new_state="integrated",
         actor_id="lead-dev",
         reviewed_by="senior-reviewer",
+        review_evidence_refs=["review://thread/999"],
         reason="review passed and merged",
     )
     assert integrated["task"]["state"] == "integrated"

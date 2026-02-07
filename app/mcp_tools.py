@@ -93,6 +93,7 @@ def transition_task_state(
     actor_id: str,
     reason: str,
     reviewed_by: str | None = None,
+    review_evidence_refs: list[str] | None = None,
     force: bool = False,
 ) -> dict[str, Any]:
     task = STORE.transition_task_state(
@@ -102,6 +103,7 @@ def transition_task_state(
         actor_id=actor_id,
         reason=reason,
         reviewed_by=reviewed_by,
+        review_evidence_refs=review_evidence_refs or [],
         force=force,
     )
     return {"task": task}

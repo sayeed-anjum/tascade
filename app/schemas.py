@@ -103,6 +103,7 @@ class TaskStateTransitionRequest(BaseModel):
     actor_id: str
     reason: str = Field(min_length=1)
     reviewed_by: str | None = None
+    review_evidence_refs: list[str] = Field(default_factory=list)
     force: bool = False
 
 

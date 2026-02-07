@@ -299,6 +299,7 @@ def transition_task_state(task_id: str, payload: TaskStateTransitionRequest) -> 
             actor_id=payload.actor_id,
             reason=payload.reason,
             reviewed_by=payload.reviewed_by,
+            review_evidence_refs=payload.review_evidence_refs,
             force=payload.force,
         )
     except KeyError:
@@ -314,6 +315,7 @@ def transition_task_state(task_id: str, payload: TaskStateTransitionRequest) -> 
             "STATE_NOT_ALLOWED": "STATE_NOT_ALLOWED",
             "INVALID_STATE": "INVALID_STATE",
             "REVIEW_REQUIRED_FOR_INTEGRATION": "REVIEW_REQUIRED_FOR_INTEGRATION",
+            "REVIEW_EVIDENCE_REQUIRED": "REVIEW_EVIDENCE_REQUIRED",
             "SELF_REVIEW_NOT_ALLOWED": "SELF_REVIEW_NOT_ALLOWED",
         }
         code = code_map.get(str(exc), "INVARIANT_VIOLATION")
