@@ -33,6 +33,7 @@ Existing task tools optimize human workflows (kanban, WIP), not distributed agen
 3. Parallel-by-default: exploit independent graph branches.
 4. Governance where leverage is highest: phase and high-risk gating.
 5. Conflict minimization by design: contention-aware scheduling and append-only artifacts.
+6. Human attention is scarce: batch and surface review checkpoints intentionally.
 
 ## 5. Goals and Success Metrics
 
@@ -97,6 +98,7 @@ Existing task tools optimize human workflows (kanban, WIP), not distributed agen
 11. As an agent, I receive explicit claim invalidation if a material replan change affects my claimed task.
 12. As an agent, I receive a structured work spec and bounded dependency context when starting work.
 13. As a reviewer, I can inspect per-task changelog and event timeline to understand progress decisions.
+14. As a reviewer/orchestrator, I receive policy-generated review/merge gate tasks that batch pending branch work into manageable checkpoints.
 
 ## 8. Functional Requirements
 
@@ -129,6 +131,7 @@ FR-9: System SHALL provide integration queue semantics and record integration at
 
 FR-10: System SHALL implement blocking gate policy at:
 - phase boundaries,
+- milestone boundaries,
 - high-risk task classes (`architecture`, `db/schema`, `security`, `cross-cutting`).
 
 FR-11: System SHALL allow human override with explicit reason and actor identity.
@@ -191,6 +194,14 @@ FR-30a: System SHALL default agent context retrieval to `ancestor_depth=2` and `
 
 FR-31: System SHALL capture an immutable task execution snapshot at claim/start (including effective `work_spec` and `plan_version`) to support completion-guaranteed `InProgress` execution and auditability.
 
+FR-32: System SHALL auto-generate policy-driven checkpoint tasks (`review_gate` / `merge_gate`) when configured triggers are met (for v1 defaults: milestone completion, implemented backlog threshold, risk threshold breach, implemented age threshold).
+
+FR-33: System SHALL support reserving checkpoint tasks to a designated orchestrator/reviewer agent and SHALL exclude those tasks from general pull unless reservation expires/releases.
+
+FR-34: System SHALL require review evidence for `Implemented -> Integrated` transitions in normal mode, including `reviewed_by` identity distinct from `actor_id`; force mode MAY bypass this only for explicit backfill/admin operations with auditable reason.
+
+FR-35: System SHALL provide checkpoint-focused visualization showing pending review/merge gates, age/SLA, risk summary, and batched candidate tasks.
+
 ## 9. Non-Functional Requirements
 
 NFR-1: Reliability: coordinator and integrations must tolerate worker crash/restart without state corruption.
@@ -210,6 +221,7 @@ NFR-6: Evolvability: schema/API versioning to add states/policies without breaki
 - Machine APIs must be idempotent and stable.
 - Machine APIs must support both pull and directed assignment interaction modes.
 - Human UI must prioritize blocked/critical-path/risky work.
+- Human UI must provide a dedicated checkpoints view/lane for policy-generated review and merge gates.
 - Milestone and phase grouping are visualization aids only, not execution semantics.
 - Completed tasks should be either hidden or color-dimmed based on user preference.
 
@@ -227,6 +239,8 @@ NFR-6: Evolvability: schema/API versioning to add states/policies without breaki
   - Mitigation: hard reservation TTL + auto-fallback to pull queue.
 - R6: Frequent replanning can cause thrash and low throughput.
   - Mitigation: impact preview, replan barrier, and policy limits on change-set frequency.
+- R7: Reviewer overload from high parallel branch output.
+  - Mitigation: policy-driven gate batching, single-active-gate-per-scope, checkpoint SLA alerts.
 
 ## 12. Release Criteria for v1
 

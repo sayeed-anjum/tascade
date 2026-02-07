@@ -22,6 +22,8 @@ The project model is a dependency graph (WBS as DAG). A task can start only when
 4. Human-in-the-loop default gate policy:
    - blocking on phase/milestone transitions.
    - blocking for high-risk task classes (`architecture`, `db/schema`, `security`, `cross-cutting`).
+   - policy-driven generation of `review_gate` / `merge_gate` checkpoint tasks to batch human review/merge work.
+   - gate tasks are reservable to orchestrator/reviewer agents and excluded from general pull queue while reserved.
 5. Scheduling model: hybrid with dual allocation modes.
    - Coordinator ranks eligible tasks.
    - Agents can pull/claim from ranked pool via leases.
@@ -95,16 +97,18 @@ Rationale: keep ops simple while preserving transactional correctness, lock sema
 4. If a hard reservation expires or is released, task returns to pull-eligible pool.
 5. Agents emit artifacts and status updates.
 6. On check success, task moves to `Implemented`.
-7. Integration workers process merge queue:
+7. Human/orchestrator resolves policy-generated gate tasks and reviews candidate branches.
+8. Integration workers process merge queue:
    - success -> `Integrated`
    - conflict/failure -> blocked/error states with diagnostics.
-8. Gate engine enforces policy for phase and high-risk transitions.
-9. Planner reprioritizes/adds/postpones work through `PlanChangeSet`.
-10. Coordinator computes impact preview, then atomically applies accepted change set to create new `plan_version`.
-11. Agents submit `seen_plan_version` on heartbeat/update; stale clients receive explicit replan guidance.
-12. Claimed leases and active reservations impacted by material task changes are invalidated and returned to `Ready`.
-13. When assigned/claimed, agent receives `work_spec` plus context graph (`ancestors`, `dependents`) with bounded depth.
-14. At claim/start, coordinator captures an immutable `TaskExecutionSnapshot` so `InProgress` work can complete against accepted scope.
+9. `Implemented -> Integrated` requires review evidence in normal mode (`reviewed_by` present and distinct from actor); force mode is reserved for explicit backfill/admin actions.
+10. Gate engine enforces policy for phase/milestone/high-risk transitions and backlog/risk/age checkpoint triggers.
+11. Planner reprioritizes/adds/postpones work through `PlanChangeSet`.
+12. Coordinator computes impact preview, then atomically applies accepted change set to create new `plan_version`.
+13. Agents submit `seen_plan_version` on heartbeat/update; stale clients receive explicit replan guidance.
+14. Claimed leases and active reservations impacted by material task changes are invalidated and returned to `Ready`.
+15. When assigned/claimed, agent receives `work_spec` plus context graph (`ancestors`, `dependents`) with bounded depth.
+16. At claim/start, coordinator captures an immutable `TaskExecutionSnapshot` so `InProgress` work can complete against accepted scope.
 
 ## 6. Conflict-Reduction Strategy
 
@@ -134,6 +138,7 @@ Rationale: keep ops simple while preserving transactional correctness, lock sema
 - Collapse/expand by phase and milestone.
 - Completed tasks configurable: hidden or visually dimmed/colored.
 - Blocked reasons visible at node and rollup levels.
+- Dedicated checkpoint lane/panel for pending `review_gate`/`merge_gate` tasks, including age/SLA and risk summary.
 
 ## 9. Out-of-Scope for v1
 

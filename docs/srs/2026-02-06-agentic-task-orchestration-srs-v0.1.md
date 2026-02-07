@@ -16,6 +16,7 @@ Specify technical requirements for a centralized orchestration service that coor
 - Integrated: task changes are merged into target branch (typically `main`) via integration service.
 - Unlock criterion: per-edge rule defining which predecessor state allows successor activation.
 - Gate: policy-enforced approval checkpoint requiring human decision before transition.
+- Gate Task: policy-generated `Task` with class `review_gate` or `merge_gate` that materializes a review/integration checkpoint for humans/orchestrators.
 - Lease: time-bound task claim by an agent with heartbeat renewal.
 - Reservation: time-bound hard assignment of a task to a specific agent.
 - PlanChangeSet: atomic set of planner modifications applied to evolve project graph/version.
@@ -93,6 +94,7 @@ Minimum entities and key fields:
 - `exclusive_paths`, `shared_paths`
 - `version` (optimistic concurrency)
 - timestamps + actor attribution
+- for `review_gate`/`merge_gate` classes: gate payload includes candidate task IDs, branch/head/base refs, CI/test summary, and risk summary.
 
 ### 4.5 DependencyEdge
 - `id`, `project_id`, `from_task_id`, `to_task_id`
@@ -124,6 +126,7 @@ Minimum entities and key fields:
 ### 4.11 GateRule / GateDecision
 - rules define when gate is required and required evidence/reviewers.
 - decisions capture approver, timestamp, outcome, rationale.
+- policy engine also generates gate tasks from these rules; gate-task lifecycle is auditable through normal task/events streams.
 
 ### 4.12 Event
 - `id` (monotonic), `project_id`, `entity_type`, `entity_id`, `event_type`, `payload`, `created_at`
@@ -168,7 +171,7 @@ Allowed baseline transitions:
 - `Claimed -> Ready` (claim invalidated by material replan change)
 - `Claimed -> InProgress`
 - `InProgress -> Implemented` (requires valid artifacts + checks pass)
-- `Implemented -> Integrated` (requires integration success)
+- `Implemented -> Integrated` (requires integration success and review evidence: `reviewed_by` present and distinct from transition actor in non-force mode)
 - `* -> Blocked` (gate/policy/conflict external blockers)
 - `Claimed|InProgress -> Abandoned` (lease timeout/manual)
 - `* -> Cancelled` (authorized planner/human action)
@@ -240,7 +243,18 @@ Eligible task set = tasks in `Ready`, not leased, not hard-reserved for another 
 
 Blocking gate MUST apply to:
 - phase transitions,
+- milestone transitions,
 - tasks with class in `{architecture, db/schema, security, cross-cutting}`.
+
+Gate generation MUST be policy-driven in v1. Default triggers:
+- milestone completion,
+- implemented backlog threshold breach,
+- risk/overlap threshold breach,
+- implemented-age threshold breach.
+
+Gate workload controls:
+- gate candidates SHOULD be batched (configurable max batch size),
+- system MUST enforce at most one active gate per configured scope (for example, milestone) unless explicitly overridden by policy.
 
 Gate decisions:
 - `Approved`, `Rejected`, `ApprovedWithRisk`.
@@ -256,6 +270,7 @@ Override actions MUST be auditable and role-restricted.
 3. Each attempt MUST run required integration checks.
 4. Conflict result MUST include machine-readable diagnostics.
 5. On conflict, task state transitions to `Conflict` or `Blocked`.
+6. Task MUST NOT transition to `Integrated` unless review requirements are satisfied (except explicit force-mode backfill/admin transitions).
 
 ## 9. API Requirements (v1)
 
@@ -275,13 +290,14 @@ Representative endpoints (versioned):
 - `GET /v1/tasks/{id}/changelog`
 - `GET /v1/tasks/{id}/events`
 - `POST /v1/tasks/{id}/artifacts`
-- `POST /v1/tasks/{id}/transition`
+- `POST /v1/tasks/{id}/state`
 - `POST /v1/plans/changesets`
 - `POST /v1/plans/changesets/{id}/validate`
 - `POST /v1/plans/changesets/{id}/apply`
 - `GET /v1/plans/current`
 - `POST /v1/integration/enqueue`
 - `POST /v1/gates/{id}/decision`
+- `GET /v1/gates/checkpoints`
 - `GET /v1/views/graph`
 - `GET /v1/views/list`
 
@@ -291,6 +307,7 @@ API constraints:
 - standard error model with invariant violation codes.
 - canonical machine protocol is REST/JSON.
 - MCP adapter MUST map tools/resources to these endpoints without introducing domain logic.
+- transition API MUST enforce review-gated `Implemented -> Integrated` invariants (`reviewed_by` required and not equal to actor in normal mode).
 - `apply` MUST fail when `base_plan_version` is stale unless caller explicitly requests rebase behavior.
 - change-set apply MUST enforce the `InProgress` no-auto-abort invariant.
 - change-set apply MUST enforce `Claimed` and `Reserved` auto-release on material change.
@@ -318,6 +335,8 @@ Required metrics:
 - lease timeout rate,
 - integration success/conflict/failure rates,
 - gate queue length and latency,
+- implemented-not-integrated backlog size and age distribution,
+- gate checkpoint batch size and reviewer throughput,
 - critical-path completion drift,
 - contention score by path.
 - context endpoint latency and payload size distribution.
