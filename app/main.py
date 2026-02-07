@@ -4,11 +4,16 @@ from fastapi.responses import JSONResponse
 from app.schemas import (
     ApplyPlanChangesetRequest,
     ApplyPlanChangesetResponse,
+    Artifact,
     AssignTaskRequest,
     ClaimTaskRequest,
     ClaimTaskResponse,
     CreatePlanChangesetRequest,
     CreateDependencyRequest,
+    CreateArtifactRequest,
+    EnqueueIntegrationAttemptRequest,
+    CreateGateDecisionRequest,
+    CreateGateRuleRequest,
     CreateProjectRequest,
     CreateTaskRequest,
     DependencyEdge,
@@ -16,6 +21,13 @@ from app.schemas import (
     GetReadyTasksResponse,
     HeartbeatRequest,
     HeartbeatResponse,
+    GateDecision,
+    GateRule,
+    IntegrationAttempt,
+    ListArtifactsResponse,
+    ListGateDecisionsResponse,
+    ListIntegrationAttemptsResponse,
+    ListTasksResponse,
     PlanChangeset,
     PlanVersion,
     Project,
@@ -25,6 +37,7 @@ from app.schemas import (
     TaskStateTransitionResponse,
     TaskReservation,
     TaskSummary,
+    UpdateIntegrationAttemptRequest,
 )
 from app.store import STORE
 
@@ -48,6 +61,74 @@ def health() -> dict[str, str]:
 def create_project(payload: CreateProjectRequest) -> Project:
     project = STORE.create_project(payload.name)
     return Project(**project)
+
+
+@app.post("/v1/gate-rules", response_model=GateRule, status_code=status.HTTP_201_CREATED)
+def create_gate_rule(payload: CreateGateRuleRequest) -> GateRule:
+    if not STORE.project_exists(payload.project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    rule = STORE.create_gate_rule(payload.model_dump())
+    return GateRule(**rule)
+
+
+@app.post("/v1/gate-decisions", response_model=GateDecision, status_code=status.HTTP_201_CREATED)
+def create_gate_decision(payload: CreateGateDecisionRequest) -> GateDecision:
+    if not STORE.project_exists(payload.project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    try:
+        decision = STORE.create_gate_decision(payload.model_dump())
+    except KeyError as exc:
+        code = str(exc.args[0]) if exc.args else "INVARIANT_VIOLATION"
+        message = {
+            "GATE_RULE_NOT_FOUND": "Gate rule not found",
+            "TASK_NOT_FOUND": "Task not found",
+            "PHASE_NOT_FOUND": "Phase not found",
+        }.get(code, "Referenced entity not found")
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(error={"code": code, "message": message, "retryable": False}).model_dump(),
+        )
+    except ValueError as exc:
+        code = str(exc)
+        message = "Invalid gate decision payload"
+        if code == "PROJECT_MISMATCH":
+            message = "Gate decision references an entity in another project"
+        elif code == "GATE_SCOPE_REQUIRED":
+            message = "Gate decision must reference task_id or phase_id"
+        elif code == "INVALID_GATE_OUTCOME":
+            message = "Invalid gate decision outcome"
+        raise HTTPException(
+            status_code=409,
+            detail=ErrorResponse(error={"code": code, "message": message, "retryable": False}).model_dump(),
+        )
+    return GateDecision(**decision)
+
+
+@app.get("/v1/gate-decisions", response_model=ListGateDecisionsResponse)
+def list_gate_decisions(
+    project_id: str,
+    task_id: str | None = None,
+    phase_id: str | None = None,
+) -> ListGateDecisionsResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    items = STORE.list_gate_decisions(project_id=project_id, task_id=task_id, phase_id=phase_id)
+    return ListGateDecisionsResponse(items=[GateDecision(**item) for item in items])
 
 
 @app.post("/v1/tasks", response_model=Task, status_code=status.HTTP_201_CREATED)
@@ -172,6 +253,56 @@ def get_ready_tasks(project_id: str, agent_id: str, capabilities: str = "") -> G
     return GetReadyTasksResponse(items=[TaskSummary(**item) for item in items])
 
 
+@app.get("/v1/tasks", response_model=ListTasksResponse)
+def list_tasks(
+    project_id: str,
+    state: str | None = None,
+    phase_id: str | None = None,
+    capability: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> ListTasksResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={
+                    "code": "PROJECT_NOT_FOUND",
+                    "message": "Project not found",
+                    "retryable": False,
+                }
+            ).model_dump(),
+        )
+    try:
+        items, total = STORE.list_tasks(
+            project_id=project_id,
+            state=state,
+            phase_id=phase_id,
+            capability=capability,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        message = "Unknown task state filter" if code == "INVALID_STATE" else "Invalid task list filter"
+        raise HTTPException(
+            status_code=409,
+            detail=ErrorResponse(
+                error={
+                    "code": code,
+                    "message": message,
+                    "retryable": False,
+                }
+            ).model_dump(),
+        )
+    return ListTasksResponse(
+        items=[TaskSummary(**item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
 @app.get("/v1/tasks/{task_id}", response_model=Task)
 def get_task(task_id: str) -> Task:
     try:
@@ -192,6 +323,234 @@ def get_task(task_id: str) -> Task:
             ).model_dump(),
         )
     return Task(**task)
+
+
+@app.post("/v1/tasks/{task_id}/artifacts", response_model=Artifact, status_code=status.HTTP_201_CREATED)
+def create_task_artifact(task_id: str, payload: CreateArtifactRequest) -> Artifact:
+    if not STORE.project_exists(payload.project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={
+                    "code": "PROJECT_NOT_FOUND",
+                    "message": "Project not found",
+                    "retryable": False,
+                }
+            ).model_dump(),
+        )
+    try:
+        artifact = STORE.create_artifact(
+            {
+                "project_id": payload.project_id,
+                "task_id": task_id,
+                "agent_id": payload.agent_id,
+                "branch": payload.branch,
+                "commit_sha": payload.commit_sha,
+                "check_suite_ref": payload.check_suite_ref,
+                "check_status": payload.check_status,
+                "touched_files": payload.touched_files,
+            }
+        )
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "TASK_NOT_FOUND", "message": "Task not found", "retryable": False}
+            ).model_dump(),
+        )
+    except ValueError as exc:
+        code = str(exc)
+        message = (
+            "Task and artifact project mismatch"
+            if code == "PROJECT_MISMATCH"
+            else "Invalid artifact payload"
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=ErrorResponse(
+                error={
+                    "code": code,
+                    "message": message,
+                    "retryable": False,
+                }
+            ).model_dump(),
+        )
+    return Artifact(**artifact)
+
+
+@app.get("/v1/tasks/{task_id}/artifacts", response_model=ListArtifactsResponse)
+def list_task_artifacts(task_id: str, project_id: str) -> ListArtifactsResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={
+                    "code": "PROJECT_NOT_FOUND",
+                    "message": "Project not found",
+                    "retryable": False,
+                }
+            ).model_dump(),
+        )
+    try:
+        items = STORE.list_task_artifacts(project_id=project_id, task_id=task_id)
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "TASK_NOT_FOUND", "message": "Task not found", "retryable": False}
+            ).model_dump(),
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=409,
+            detail=ErrorResponse(
+                error={
+                    "code": "PROJECT_MISMATCH",
+                    "message": "Task and artifact project mismatch",
+                    "retryable": False,
+                }
+            ).model_dump(),
+        )
+    return ListArtifactsResponse(items=[Artifact(**item) for item in items])
+
+
+@app.post(
+    "/v1/tasks/{task_id}/integration-attempts",
+    response_model=IntegrationAttempt,
+    status_code=status.HTTP_201_CREATED,
+)
+def enqueue_integration_attempt(task_id: str, payload: EnqueueIntegrationAttemptRequest) -> IntegrationAttempt:
+    if not STORE.project_exists(payload.project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={
+                    "code": "PROJECT_NOT_FOUND",
+                    "message": "Project not found",
+                    "retryable": False,
+                }
+            ).model_dump(),
+        )
+    try:
+        attempt = STORE.enqueue_integration_attempt(
+            {
+                "project_id": payload.project_id,
+                "task_id": task_id,
+                "base_sha": payload.base_sha,
+                "head_sha": payload.head_sha,
+                "diagnostics": payload.diagnostics,
+            }
+        )
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "TASK_NOT_FOUND", "message": "Task not found", "retryable": False}
+            ).model_dump(),
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=409,
+            detail=ErrorResponse(
+                error={
+                    "code": "PROJECT_MISMATCH",
+                    "message": "Task and integration attempt project mismatch",
+                    "retryable": False,
+                }
+            ).model_dump(),
+        )
+    return IntegrationAttempt(**attempt)
+
+
+@app.get("/v1/tasks/{task_id}/integration-attempts", response_model=ListIntegrationAttemptsResponse)
+def list_integration_attempts(task_id: str, project_id: str) -> ListIntegrationAttemptsResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={
+                    "code": "PROJECT_NOT_FOUND",
+                    "message": "Project not found",
+                    "retryable": False,
+                }
+            ).model_dump(),
+        )
+    try:
+        items = STORE.list_integration_attempts(project_id=project_id, task_id=task_id)
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "TASK_NOT_FOUND", "message": "Task not found", "retryable": False}
+            ).model_dump(),
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=409,
+            detail=ErrorResponse(
+                error={
+                    "code": "PROJECT_MISMATCH",
+                    "message": "Task and integration attempt project mismatch",
+                    "retryable": False,
+                }
+            ).model_dump(),
+        )
+    return ListIntegrationAttemptsResponse(items=[IntegrationAttempt(**item) for item in items])
+
+
+@app.post("/v1/integration-attempts/{attempt_id}/result", response_model=IntegrationAttempt)
+def update_integration_attempt_result(
+    attempt_id: str, payload: UpdateIntegrationAttemptRequest
+) -> IntegrationAttempt:
+    if not STORE.project_exists(payload.project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={
+                    "code": "PROJECT_NOT_FOUND",
+                    "message": "Project not found",
+                    "retryable": False,
+                }
+            ).model_dump(),
+        )
+    try:
+        attempt = STORE.update_integration_attempt(
+            {
+                "attempt_id": attempt_id,
+                "project_id": payload.project_id,
+                "result": payload.result,
+                "diagnostics": payload.diagnostics,
+            }
+        )
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={
+                    "code": "INTEGRATION_ATTEMPT_NOT_FOUND",
+                    "message": "Integration attempt not found",
+                    "retryable": False,
+                }
+            ).model_dump(),
+        )
+    except ValueError as exc:
+        code = str(exc)
+        message = (
+            "Task and integration attempt project mismatch"
+            if code == "PROJECT_MISMATCH"
+            else "Invalid integration attempt transition"
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=ErrorResponse(
+                error={
+                    "code": code,
+                    "message": message,
+                    "retryable": False,
+                }
+            ).model_dump(),
+        )
+    return IntegrationAttempt(**attempt)
 
 
 @app.post("/v1/tasks/{task_id}/claim", response_model=ClaimTaskResponse)
@@ -326,6 +685,7 @@ def transition_task_state(task_id: str, payload: TaskStateTransitionRequest) -> 
             "REVIEW_REQUIRED_FOR_INTEGRATION": "REVIEW_REQUIRED_FOR_INTEGRATION",
             "REVIEW_EVIDENCE_REQUIRED": "REVIEW_EVIDENCE_REQUIRED",
             "SELF_REVIEW_NOT_ALLOWED": "SELF_REVIEW_NOT_ALLOWED",
+            "GATE_DECISION_REQUIRED": "GATE_DECISION_REQUIRED",
         }
         code = code_map.get(str(exc), "INVARIANT_VIOLATION")
         raise HTTPException(

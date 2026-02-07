@@ -135,6 +135,13 @@ class GetReadyTasksResponse(BaseModel):
     items: list[TaskSummary]
 
 
+class ListTasksResponse(BaseModel):
+    items: list[TaskSummary]
+    total: int
+    limit: int
+    offset: int
+
+
 class Lease(BaseModel):
     id: str
     project_id: str
@@ -159,6 +166,115 @@ class TaskExecutionSnapshot(BaseModel):
     work_spec_payload: WorkSpec
     captured_by: str
     captured_at: str
+
+
+class CreateArtifactRequest(BaseModel):
+    project_id: str
+    agent_id: str = Field(min_length=1)
+    branch: str | None = None
+    commit_sha: str | None = None
+    check_suite_ref: str | None = None
+    check_status: Literal["pending", "passed", "failed"] = "pending"
+    touched_files: list[str] = Field(default_factory=list)
+
+
+class Artifact(BaseModel):
+    id: str
+    short_id: str | None = None
+    project_id: str
+    task_id: str
+    agent_id: str
+    branch: str | None = None
+    commit_sha: str | None = None
+    check_suite_ref: str | None = None
+    check_status: Literal["pending", "passed", "failed"]
+    touched_files: list[str]
+    created_at: str
+
+
+class ListArtifactsResponse(BaseModel):
+    items: list[Artifact]
+
+
+class EnqueueIntegrationAttemptRequest(BaseModel):
+    project_id: str
+    base_sha: str | None = None
+    head_sha: str | None = None
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+
+
+class UpdateIntegrationAttemptRequest(BaseModel):
+    project_id: str
+    result: Literal["success", "conflict", "failed_checks"]
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+
+
+class IntegrationAttempt(BaseModel):
+    id: str
+    short_id: str | None = None
+    project_id: str
+    task_id: str
+    base_sha: str | None = None
+    head_sha: str | None = None
+    result: Literal["queued", "success", "conflict", "failed_checks"]
+    diagnostics: dict[str, Any]
+    started_at: str
+    ended_at: str | None = None
+
+
+class ListIntegrationAttemptsResponse(BaseModel):
+    items: list[IntegrationAttempt]
+
+
+class CreateGateRuleRequest(BaseModel):
+    project_id: str
+    name: str = Field(min_length=1)
+    scope: dict[str, Any] = Field(default_factory=dict)
+    conditions: dict[str, Any] = Field(default_factory=dict)
+    required_evidence: dict[str, Any] = Field(default_factory=dict)
+    required_reviewer_roles: list[str] = Field(default_factory=list)
+    is_active: bool = True
+
+
+class GateRule(BaseModel):
+    id: str
+    project_id: str
+    name: str
+    scope: dict[str, Any]
+    conditions: dict[str, Any]
+    required_evidence: dict[str, Any]
+    required_reviewer_roles: list[str]
+    is_active: bool
+    created_at: str
+    updated_at: str
+
+
+class CreateGateDecisionRequest(BaseModel):
+    project_id: str
+    gate_rule_id: str
+    task_id: str | None = None
+    phase_id: str | None = None
+    outcome: Literal["approved", "rejected", "approved_with_risk"]
+    actor_id: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+    evidence_refs: list[str] = Field(default_factory=list)
+
+
+class GateDecision(BaseModel):
+    id: str
+    project_id: str
+    gate_rule_id: str
+    task_id: str | None = None
+    phase_id: str | None = None
+    outcome: Literal["approved", "rejected", "approved_with_risk"]
+    actor_id: str
+    reason: str
+    evidence_refs: list[str]
+    created_at: str
+
+
+class ListGateDecisionsResponse(BaseModel):
+    items: list[GateDecision]
 
 
 class ClaimTaskRequest(BaseModel):

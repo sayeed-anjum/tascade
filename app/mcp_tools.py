@@ -9,6 +9,69 @@ def create_project(name: str) -> dict[str, Any]:
     return STORE.create_project(name=name)
 
 
+def create_gate_rule(
+    *,
+    project_id: str,
+    name: str,
+    scope: dict[str, Any] | None = None,
+    conditions: dict[str, Any] | None = None,
+    required_evidence: dict[str, Any] | None = None,
+    required_reviewer_roles: list[str] | None = None,
+    is_active: bool = True,
+) -> dict[str, Any]:
+    if not STORE.project_exists(project_id):
+        raise KeyError("PROJECT_NOT_FOUND")
+    return STORE.create_gate_rule(
+        {
+            "project_id": project_id,
+            "name": name,
+            "scope": scope or {},
+            "conditions": conditions or {},
+            "required_evidence": required_evidence or {},
+            "required_reviewer_roles": required_reviewer_roles or [],
+            "is_active": is_active,
+        }
+    )
+
+
+def create_gate_decision(
+    *,
+    project_id: str,
+    gate_rule_id: str,
+    task_id: str | None = None,
+    phase_id: str | None = None,
+    outcome: str,
+    actor_id: str,
+    reason: str,
+    evidence_refs: list[str] | None = None,
+) -> dict[str, Any]:
+    if not STORE.project_exists(project_id):
+        raise KeyError("PROJECT_NOT_FOUND")
+    return STORE.create_gate_decision(
+        {
+            "project_id": project_id,
+            "gate_rule_id": gate_rule_id,
+            "task_id": task_id,
+            "phase_id": phase_id,
+            "outcome": outcome,
+            "actor_id": actor_id,
+            "reason": reason,
+            "evidence_refs": evidence_refs or [],
+        }
+    )
+
+
+def list_gate_decisions(
+    *,
+    project_id: str,
+    task_id: str | None = None,
+    phase_id: str | None = None,
+) -> dict[str, Any]:
+    if not STORE.project_exists(project_id):
+        raise KeyError("PROJECT_NOT_FOUND")
+    return {"items": STORE.list_gate_decisions(project_id=project_id, task_id=task_id, phase_id=phase_id)}
+
+
 def get_project(project_id: str) -> dict[str, Any]:
     project = STORE.get_project(project_id)
     if project is None:
@@ -146,6 +209,115 @@ def list_ready_tasks(
         raise KeyError("PROJECT_NOT_FOUND")
     items = STORE.get_ready_tasks(project_id, agent_id, set(capabilities or []))
     return {"items": items}
+
+
+def list_tasks(
+    *,
+    project_id: str,
+    state: str | None = None,
+    phase_id: str | None = None,
+    capability: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
+    if not STORE.project_exists(project_id):
+        raise KeyError("PROJECT_NOT_FOUND")
+    items, total = STORE.list_tasks(
+        project_id=project_id,
+        state=state,
+        phase_id=phase_id,
+        capability=capability,
+        limit=limit,
+        offset=offset,
+    )
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
+
+
+def create_task_artifact(
+    *,
+    project_id: str,
+    task_id: str,
+    agent_id: str,
+    branch: str | None = None,
+    commit_sha: str | None = None,
+    check_suite_ref: str | None = None,
+    check_status: str = "pending",
+    touched_files: list[str] | None = None,
+) -> dict[str, Any]:
+    if not STORE.project_exists(project_id):
+        raise KeyError("PROJECT_NOT_FOUND")
+    return STORE.create_artifact(
+        {
+            "project_id": project_id,
+            "task_id": task_id,
+            "agent_id": agent_id,
+            "branch": branch,
+            "commit_sha": commit_sha,
+            "check_suite_ref": check_suite_ref,
+            "check_status": check_status,
+            "touched_files": touched_files or [],
+        }
+    )
+
+
+def list_task_artifacts(
+    *,
+    project_id: str,
+    task_id: str,
+) -> dict[str, Any]:
+    if not STORE.project_exists(project_id):
+        raise KeyError("PROJECT_NOT_FOUND")
+    return {"items": STORE.list_task_artifacts(project_id=project_id, task_id=task_id)}
+
+
+def enqueue_integration_attempt(
+    *,
+    project_id: str,
+    task_id: str,
+    base_sha: str | None = None,
+    head_sha: str | None = None,
+    diagnostics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not STORE.project_exists(project_id):
+        raise KeyError("PROJECT_NOT_FOUND")
+    return STORE.enqueue_integration_attempt(
+        {
+            "project_id": project_id,
+            "task_id": task_id,
+            "base_sha": base_sha,
+            "head_sha": head_sha,
+            "diagnostics": diagnostics or {},
+        }
+    )
+
+
+def update_integration_attempt_result(
+    *,
+    attempt_id: str,
+    project_id: str,
+    result: str,
+    diagnostics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not STORE.project_exists(project_id):
+        raise KeyError("PROJECT_NOT_FOUND")
+    return STORE.update_integration_attempt(
+        {
+            "attempt_id": attempt_id,
+            "project_id": project_id,
+            "result": result,
+            "diagnostics": diagnostics or {},
+        }
+    )
+
+
+def list_integration_attempts(
+    *,
+    project_id: str,
+    task_id: str,
+) -> dict[str, Any]:
+    if not STORE.project_exists(project_id):
+        raise KeyError("PROJECT_NOT_FOUND")
+    return {"items": STORE.list_integration_attempts(project_id=project_id, task_id=task_id)}
 
 
 def claim_task(

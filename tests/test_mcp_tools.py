@@ -147,6 +147,266 @@ def test_mcp_task_context_returns_ancestors_and_dependents():
     assert task_c["id"] in dependent_ids
 
 
+def test_mcp_list_tasks_supports_filters_and_pagination():
+    project = mcp_tools.create_project(name="mcp-list-tasks-proj")
+    project_id = project["id"]
+    phase_a = mcp_tools.create_phase(project_id=project_id, name="Phase A", sequence=0)
+    phase_b = mcp_tools.create_phase(project_id=project_id, name="Phase B", sequence=1)
+    milestone_a = mcp_tools.create_milestone(
+        project_id=project_id,
+        name="Milestone A",
+        sequence=0,
+        phase_id=phase_a["id"],
+    )
+    milestone_b = mcp_tools.create_milestone(
+        project_id=project_id,
+        name="Milestone B",
+        sequence=1,
+        phase_id=phase_b["id"],
+    )
+
+    task_a = mcp_tools.create_task(
+        project_id=project_id,
+        title="Task A",
+        task_class="backend",
+        work_spec=_work_spec("Task A"),
+        capability_tags=["backend"],
+        phase_id=phase_a["id"],
+        milestone_id=milestone_a["id"],
+    )
+    task_b = mcp_tools.create_task(
+        project_id=project_id,
+        title="Task B",
+        task_class="backend",
+        work_spec=_work_spec("Task B"),
+        capability_tags=["frontend"],
+        phase_id=phase_a["id"],
+        milestone_id=milestone_a["id"],
+    )
+    task_c = mcp_tools.create_task(
+        project_id=project_id,
+        title="Task C",
+        task_class="backend",
+        work_spec=_work_spec("Task C"),
+        capability_tags=["backend", "api"],
+        phase_id=phase_b["id"],
+        milestone_id=milestone_b["id"],
+    )
+    mcp_tools.transition_task_state(
+        task_id=task_b["id"],
+        project_id=project_id,
+        new_state="in_progress",
+        actor_id="dev-1",
+        reason="started implementation",
+    )
+
+    all_items = mcp_tools.list_tasks(project_id=project_id)
+    assert all_items["total"] == 3
+    assert [item["id"] for item in all_items["items"]] == [task_a["id"], task_b["id"], task_c["id"]]
+
+    by_state = mcp_tools.list_tasks(project_id=project_id, state="in_progress")
+    assert by_state["total"] == 1
+    assert by_state["items"][0]["id"] == task_b["id"]
+
+    by_phase = mcp_tools.list_tasks(project_id=project_id, phase_id=phase_a["id"])
+    assert by_phase["total"] == 2
+    assert {item["id"] for item in by_phase["items"]} == {task_a["id"], task_b["id"]}
+
+    by_capability = mcp_tools.list_tasks(project_id=project_id, capability="backend")
+    assert by_capability["total"] == 2
+    assert {item["id"] for item in by_capability["items"]} == {task_a["id"], task_c["id"]}
+
+    paged = mcp_tools.list_tasks(project_id=project_id, limit=1, offset=1)
+    assert paged["total"] == 3
+    assert paged["limit"] == 1
+    assert paged["offset"] == 1
+    assert [item["id"] for item in paged["items"]] == [task_b["id"]]
+
+
+def test_mcp_create_and_list_task_artifacts():
+    project = mcp_tools.create_project(name="mcp-artifact-proj")
+    phase, milestone = _create_hierarchy(project["id"], "Artifact")
+    task = mcp_tools.create_task(
+        project_id=project["id"],
+        title="Artifact task",
+        task_class="backend",
+        work_spec=_work_spec("Artifact task"),
+        phase_id=phase["id"],
+        milestone_id=milestone["id"],
+    )
+
+    artifact = mcp_tools.create_task_artifact(
+        project_id=project["id"],
+        task_id=task["id"],
+        agent_id="agent-1",
+        branch="codex/artifact",
+        commit_sha="abc123",
+        check_suite_ref="ci://suite/1",
+        check_status="passed",
+        touched_files=["app/store.py"],
+    )
+    assert artifact["task_id"] == task["id"]
+    assert artifact["project_id"] == project["id"]
+    assert artifact["check_status"] == "passed"
+    assert artifact["short_id"]
+
+    listed = mcp_tools.list_task_artifacts(project_id=project["id"], task_id=task["id"])
+    assert len(listed["items"]) == 1
+    assert listed["items"][0]["id"] == artifact["id"]
+
+    try:
+        mcp_tools.create_task_artifact(
+            project_id=project["id"],
+            task_id=task["id"],
+            agent_id="agent-1",
+            check_status="unknown",
+        )
+        raise AssertionError("Expected ValueError")
+    except ValueError as exc:
+        assert str(exc) == "INVALID_CHECK_STATUS"
+
+
+def test_mcp_integration_attempt_enqueue_and_lifecycle():
+    project = mcp_tools.create_project(name="mcp-integration-attempt-proj")
+    phase, milestone = _create_hierarchy(project["id"], "Integrate")
+    task = mcp_tools.create_task(
+        project_id=project["id"],
+        title="Integration task",
+        task_class="backend",
+        work_spec=_work_spec("Integration task"),
+        phase_id=phase["id"],
+        milestone_id=milestone["id"],
+    )
+
+    queued = mcp_tools.enqueue_integration_attempt(
+        project_id=project["id"],
+        task_id=task["id"],
+        base_sha="base1",
+        head_sha="head1",
+        diagnostics={"queued_by": "agent-1"},
+    )
+    assert queued["result"] == "queued"
+    assert queued["ended_at"] is None
+    assert queued["short_id"]
+
+    success = mcp_tools.update_integration_attempt_result(
+        attempt_id=queued["id"],
+        project_id=project["id"],
+        result="success",
+        diagnostics={"merge_commit": "abc"},
+    )
+    assert success["result"] == "success"
+    assert success["ended_at"] is not None
+
+    queued_conflict = mcp_tools.enqueue_integration_attempt(
+        project_id=project["id"],
+        task_id=task["id"],
+        base_sha="base2",
+        head_sha="head2",
+    )
+    conflict = mcp_tools.update_integration_attempt_result(
+        attempt_id=queued_conflict["id"],
+        project_id=project["id"],
+        result="conflict",
+        diagnostics={"conflict_files": ["app/store.py"]},
+    )
+    assert conflict["result"] == "conflict"
+
+    queued_failed_checks = mcp_tools.enqueue_integration_attempt(
+        project_id=project["id"],
+        task_id=task["id"],
+        base_sha="base3",
+        head_sha="head3",
+    )
+    failed_checks = mcp_tools.update_integration_attempt_result(
+        attempt_id=queued_failed_checks["id"],
+        project_id=project["id"],
+        result="failed_checks",
+        diagnostics={"check_suite": "ci://suite/1"},
+    )
+    assert failed_checks["result"] == "failed_checks"
+
+    listed = mcp_tools.list_integration_attempts(project_id=project["id"], task_id=task["id"])
+    assert {item["result"] for item in listed["items"]} == {"success", "conflict", "failed_checks"}
+
+
+def test_mcp_gate_decision_write_read_and_gate_enforcement():
+    project = mcp_tools.create_project(name="mcp-gate-decision-proj")
+    phase, milestone = _create_hierarchy(project["id"], "Gate")
+    gate_task = mcp_tools.create_task(
+        project_id=project["id"],
+        title="Gate task",
+        task_class="review_gate",
+        work_spec=_work_spec("Gate task"),
+        phase_id=phase["id"],
+        milestone_id=milestone["id"],
+    )
+
+    mcp_tools.transition_task_state(
+        task_id=gate_task["id"],
+        project_id=project["id"],
+        new_state="in_progress",
+        actor_id="dev-1",
+        reason="start",
+    )
+    mcp_tools.transition_task_state(
+        task_id=gate_task["id"],
+        project_id=project["id"],
+        new_state="implemented",
+        actor_id="dev-1",
+        reason="done",
+    )
+
+    try:
+        mcp_tools.transition_task_state(
+            task_id=gate_task["id"],
+            project_id=project["id"],
+            new_state="integrated",
+            actor_id="dev-1",
+            reviewed_by="reviewer-1",
+            review_evidence_refs=["review://thread/300"],
+            reason="attempt merge without decision",
+        )
+        raise AssertionError("Expected ValueError")
+    except ValueError as exc:
+        assert str(exc) == "GATE_DECISION_REQUIRED"
+
+    rule = mcp_tools.create_gate_rule(
+        project_id=project["id"],
+        name="Gate rule",
+        scope={"milestone": milestone["id"]},
+        conditions={"type": "review_gate"},
+        required_evidence={"review": True},
+        required_reviewer_roles=["reviewer"],
+    )
+    decision = mcp_tools.create_gate_decision(
+        project_id=project["id"],
+        gate_rule_id=rule["id"],
+        task_id=gate_task["id"],
+        phase_id=phase["id"],
+        outcome="approved",
+        actor_id="reviewer-1",
+        reason="Ship it",
+        evidence_refs=["review://thread/300"],
+    )
+    assert decision["outcome"] == "approved"
+
+    listed = mcp_tools.list_gate_decisions(project_id=project["id"], task_id=gate_task["id"])
+    assert len(listed["items"]) == 1
+    assert listed["items"][0]["id"] == decision["id"]
+
+    integrated = mcp_tools.transition_task_state(
+        task_id=gate_task["id"],
+        project_id=project["id"],
+        new_state="integrated",
+        actor_id="dev-1",
+        reviewed_by="reviewer-1",
+        review_evidence_refs=["review://thread/300"],
+        reason="merge",
+    )
+    assert integrated["task"]["state"] == "integrated"
+
+
 def test_mcp_read_tools_get_project_list_projects_and_get_task():
     created_a = mcp_tools.create_project(name="read-proj-a")
     created_b = mcp_tools.create_project(name="read-proj-b")
@@ -218,6 +478,15 @@ def test_mcp_tool_contract_contains_setup_and_execution_tools():
         "get_task",
         "transition_task_state",
         "create_dependency",
+        "list_tasks",
+        "create_task_artifact",
+        "list_task_artifacts",
+        "enqueue_integration_attempt",
+        "update_integration_attempt_result",
+        "list_integration_attempts",
+        "create_gate_rule",
+        "create_gate_decision",
+        "list_gate_decisions",
         "list_ready_tasks",
         "claim_task",
         "heartbeat_task",
@@ -353,3 +622,36 @@ def test_mcp_create_task_requires_milestone_and_matching_phase():
         raise AssertionError("Expected ValueError")
     except ValueError as exc:
         assert str(exc) == "PHASE_MILESTONE_MISMATCH"
+
+
+def test_mcp_create_phase_rejects_duplicate_sequence():
+    project = mcp_tools.create_project(name="phase-sequence-conflict-proj")
+    mcp_tools.create_phase(project_id=project["id"], name="Phase A", sequence=0)
+
+    try:
+        mcp_tools.create_phase(project_id=project["id"], name="Phase B", sequence=0)
+        raise AssertionError("Expected ValueError")
+    except ValueError as exc:
+        assert str(exc) == "SEQUENCE_CONFLICT"
+
+
+def test_mcp_create_milestone_rejects_duplicate_sequence():
+    project = mcp_tools.create_project(name="milestone-sequence-conflict-proj")
+    phase = mcp_tools.create_phase(project_id=project["id"], name="Phase A", sequence=0)
+    mcp_tools.create_milestone(
+        project_id=project["id"],
+        name="Milestone A",
+        sequence=0,
+        phase_id=phase["id"],
+    )
+
+    try:
+        mcp_tools.create_milestone(
+            project_id=project["id"],
+            name="Milestone B",
+            sequence=0,
+            phase_id=phase["id"],
+        )
+        raise AssertionError("Expected ValueError")
+    except ValueError as exc:
+        assert str(exc) == "SEQUENCE_CONFLICT"

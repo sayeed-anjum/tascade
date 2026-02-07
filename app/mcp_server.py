@@ -12,6 +12,9 @@ from app import mcp_tools
 
 MCP_TOOL_NAMES = [
     "create_project",
+    "create_gate_rule",
+    "create_gate_decision",
+    "list_gate_decisions",
     "get_project",
     "list_projects",
     "create_phase",
@@ -20,6 +23,12 @@ MCP_TOOL_NAMES = [
     "get_task",
     "transition_task_state",
     "create_dependency",
+    "list_tasks",
+    "create_task_artifact",
+    "list_task_artifacts",
+    "enqueue_integration_attempt",
+    "update_integration_attempt_result",
+    "list_integration_attempts",
     "list_ready_tasks",
     "claim_task",
     "heartbeat_task",
@@ -53,6 +62,14 @@ _DOMAIN_ERRORS: dict[str, tuple[str, bool]] = {
     "MILESTONE_NOT_FOUND": ("Milestone not found", False),
     "IDENTIFIER_PARENT_REQUIRED": ("Hierarchy parent is required for short-id generation", False),
     "PHASE_MILESTONE_MISMATCH": ("Task phase and milestone phase must match", False),
+    "SEQUENCE_CONFLICT": ("Sequence already exists in this scope", False),
+    "INVALID_CHECK_STATUS": ("Artifact check_status is invalid", False),
+    "INTEGRATION_ATTEMPT_NOT_FOUND": ("Integration attempt not found", False),
+    "INVALID_INTEGRATION_RESULT": ("Integration attempt result is invalid", False),
+    "GATE_RULE_NOT_FOUND": ("Gate rule not found", False),
+    "GATE_SCOPE_REQUIRED": ("Gate decision requires task_id or phase_id", False),
+    "INVALID_GATE_OUTCOME": ("Gate decision outcome is invalid", False),
+    "GATE_DECISION_REQUIRED": ("Gate decision is required before integration", False),
 }
 
 
@@ -104,6 +121,9 @@ def create_mcp_server():
     server = FastMCP("tascade")
 
     server.tool(name="create_project")(_wrap_tool(mcp_tools.create_project))
+    server.tool(name="create_gate_rule")(_wrap_tool(mcp_tools.create_gate_rule))
+    server.tool(name="create_gate_decision")(_wrap_tool(mcp_tools.create_gate_decision))
+    server.tool(name="list_gate_decisions")(_wrap_tool(mcp_tools.list_gate_decisions))
     server.tool(name="get_project")(_wrap_tool(mcp_tools.get_project))
     server.tool(name="list_projects")(_wrap_tool(mcp_tools.list_projects))
     server.tool(name="create_phase")(_wrap_tool(mcp_tools.create_phase))
@@ -112,6 +132,14 @@ def create_mcp_server():
     server.tool(name="get_task")(_wrap_tool(mcp_tools.get_task))
     server.tool(name="transition_task_state")(_wrap_tool(mcp_tools.transition_task_state))
     server.tool(name="create_dependency")(_wrap_tool(mcp_tools.create_dependency))
+    server.tool(name="list_tasks")(_wrap_tool(mcp_tools.list_tasks))
+    server.tool(name="create_task_artifact")(_wrap_tool(mcp_tools.create_task_artifact))
+    server.tool(name="list_task_artifacts")(_wrap_tool(mcp_tools.list_task_artifacts))
+    server.tool(name="enqueue_integration_attempt")(_wrap_tool(mcp_tools.enqueue_integration_attempt))
+    server.tool(name="update_integration_attempt_result")(
+        _wrap_tool(mcp_tools.update_integration_attempt_result)
+    )
+    server.tool(name="list_integration_attempts")(_wrap_tool(mcp_tools.list_integration_attempts))
     server.tool(name="list_ready_tasks")(_wrap_tool(mcp_tools.list_ready_tasks))
     server.tool(name="claim_task")(_wrap_tool(mcp_tools.claim_task))
     server.tool(name="heartbeat_task")(_wrap_tool(mcp_tools.heartbeat_task))

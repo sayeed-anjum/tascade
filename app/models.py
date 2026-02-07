@@ -84,6 +84,25 @@ class PlanChangeSetStatus(str, Enum):
     REJECTED = "rejected"
 
 
+class CheckStatus(str, Enum):
+    PENDING = "pending"
+    PASSED = "passed"
+    FAILED = "failed"
+
+
+class IntegrationResult(str, Enum):
+    QUEUED = "queued"
+    SUCCESS = "success"
+    CONFLICT = "conflict"
+    FAILED_CHECKS = "failed_checks"
+
+
+class GateDecisionOutcome(str, Enum):
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    APPROVED_WITH_RISK = "approved_with_risk"
+
+
 UUID_TEXT = Uuid(as_uuid=False)
 TEXT_LIST = JSON().with_variant(ARRAY(Text), "postgresql")
 
@@ -288,6 +307,93 @@ class TaskExecutionSnapshotModel(Base):
     work_spec_payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     captured_by: Mapped[str] = mapped_column(Text, nullable=False)
     captured_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+
+class ArtifactModel(Base):
+    __tablename__ = "artifact"
+
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    task_id: Mapped[str] = mapped_column(
+        UUID_TEXT, ForeignKey("task.id", ondelete="CASCADE"), nullable=False
+    )
+    agent_id: Mapped[str] = mapped_column(Text, nullable=False)
+    branch: Mapped[str | None] = mapped_column(Text, nullable=True)
+    commit_sha: Mapped[str | None] = mapped_column(Text, nullable=True)
+    check_suite_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
+    check_status: Mapped[CheckStatus] = mapped_column(
+        SAEnum(CheckStatus, values_callable=_enum_values), nullable=False, default=CheckStatus.PENDING
+    )
+    touched_files: Mapped[list[str]] = mapped_column(TEXT_LIST, nullable=False, default=list)
+    artifact_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    short_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+
+class IntegrationAttemptModel(Base):
+    __tablename__ = "integration_attempt"
+
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    task_id: Mapped[str] = mapped_column(
+        UUID_TEXT, ForeignKey("task.id", ondelete="CASCADE"), nullable=False
+    )
+    base_sha: Mapped[str | None] = mapped_column(Text, nullable=True)
+    head_sha: Mapped[str | None] = mapped_column(Text, nullable=True)
+    result: Mapped[IntegrationResult] = mapped_column(
+        SAEnum(IntegrationResult, values_callable=_enum_values), nullable=False, default=IntegrationResult.QUEUED
+    )
+    diagnostics: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    attempt_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    short_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class GateRuleModel(Base):
+    __tablename__ = "gate_rule"
+
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    scope: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    conditions: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    required_evidence: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    required_reviewer_roles: Mapped[list[str]] = mapped_column(TEXT_LIST, nullable=False, default=list)
+    is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+
+class GateDecisionModel(Base):
+    __tablename__ = "gate_decision"
+
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    gate_rule_id: Mapped[str] = mapped_column(
+        UUID_TEXT, ForeignKey("gate_rule.id", ondelete="RESTRICT"), nullable=False
+    )
+    task_id: Mapped[str | None] = mapped_column(
+        UUID_TEXT, ForeignKey("task.id", ondelete="CASCADE"), nullable=True
+    )
+    phase_id: Mapped[str | None] = mapped_column(
+        UUID_TEXT, ForeignKey("phase.id", ondelete="CASCADE"), nullable=True
+    )
+    outcome: Mapped[GateDecisionOutcome] = mapped_column(
+        SAEnum(GateDecisionOutcome, values_callable=_enum_values), nullable=False
+    )
+    actor_id: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence_refs: Mapped[list[str]] = mapped_column(TEXT_LIST, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
 
 
 class EventLogModel(Base):

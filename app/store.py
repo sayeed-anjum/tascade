@@ -10,8 +10,15 @@ from sqlalchemy import func, select
 
 from app.db import SessionLocal, init_db, reset_db
 from app.models import (
+    ArtifactModel,
+    CheckStatus,
     DependencyEdgeModel,
     EventLogModel,
+    GateDecisionModel,
+    GateDecisionOutcome,
+    GateRuleModel,
+    IntegrationAttemptModel,
+    IntegrationResult,
     LeaseModel,
     LeaseStatus,
     MilestoneModel,
@@ -80,6 +87,67 @@ def _task_to_dict(model: TaskModel) -> dict[str, Any]:
         "version": model.version,
         "created_at": _iso(model.created_at),
         "updated_at": _iso(model.updated_at),
+    }
+
+
+def _artifact_to_dict(model: ArtifactModel) -> dict[str, Any]:
+    return {
+        "id": model.id,
+        "short_id": model.short_id,
+        "project_id": model.project_id,
+        "task_id": model.task_id,
+        "agent_id": model.agent_id,
+        "branch": model.branch,
+        "commit_sha": model.commit_sha,
+        "check_suite_ref": model.check_suite_ref,
+        "check_status": model.check_status.value,
+        "touched_files": model.touched_files or [],
+        "created_at": _iso(model.created_at),
+    }
+
+
+def _integration_attempt_to_dict(model: IntegrationAttemptModel) -> dict[str, Any]:
+    return {
+        "id": model.id,
+        "short_id": model.short_id,
+        "project_id": model.project_id,
+        "task_id": model.task_id,
+        "base_sha": model.base_sha,
+        "head_sha": model.head_sha,
+        "result": model.result.value,
+        "diagnostics": model.diagnostics or {},
+        "started_at": _iso(model.started_at),
+        "ended_at": _iso(model.ended_at),
+    }
+
+
+def _gate_rule_to_dict(model: GateRuleModel) -> dict[str, Any]:
+    return {
+        "id": model.id,
+        "project_id": model.project_id,
+        "name": model.name,
+        "scope": model.scope or {},
+        "conditions": model.conditions or {},
+        "required_evidence": model.required_evidence or {},
+        "required_reviewer_roles": model.required_reviewer_roles or [],
+        "is_active": model.is_active,
+        "created_at": _iso(model.created_at),
+        "updated_at": _iso(model.updated_at),
+    }
+
+
+def _gate_decision_to_dict(model: GateDecisionModel) -> dict[str, Any]:
+    return {
+        "id": model.id,
+        "project_id": model.project_id,
+        "gate_rule_id": model.gate_rule_id,
+        "task_id": model.task_id,
+        "phase_id": model.phase_id,
+        "outcome": model.outcome.value,
+        "actor_id": model.actor_id,
+        "reason": model.reason,
+        "evidence_refs": model.evidence_refs or [],
+        "created_at": _iso(model.created_at),
     }
 
 
@@ -267,6 +335,15 @@ class SqlStore:
 
     def create_phase(self, project_id: str, name: str, sequence: int) -> dict[str, Any]:
         with SessionLocal.begin() as session:
+            duplicate = session.execute(
+                select(PhaseModel.id).where(
+                    PhaseModel.project_id == project_id,
+                    PhaseModel.sequence == sequence,
+                )
+            ).scalar_one_or_none()
+            if duplicate is not None:
+                raise ValueError("SEQUENCE_CONFLICT")
+
             current_max = session.execute(
                 select(func.max(PhaseModel.phase_number)).where(PhaseModel.project_id == project_id)
             ).scalar_one()
@@ -297,6 +374,14 @@ class SqlStore:
             phase = session.get(PhaseModel, phase_id)
             if phase is None or phase.project_id != project_id:
                 raise KeyError("PHASE_NOT_FOUND")
+            duplicate = session.execute(
+                select(MilestoneModel.id).where(
+                    MilestoneModel.project_id == project_id,
+                    MilestoneModel.sequence == sequence,
+                )
+            ).scalar_one_or_none()
+            if duplicate is not None:
+                raise ValueError("SEQUENCE_CONFLICT")
             current_max = session.execute(
                 select(func.max(MilestoneModel.milestone_number)).where(
                     MilestoneModel.project_id == project_id,
@@ -480,6 +565,18 @@ class SqlStore:
                     raise ValueError("REVIEW_EVIDENCE_REQUIRED")
                 if reviewer == actor_id:
                     raise ValueError("SELF_REVIEW_NOT_ALLOWED")
+                if task.task_class in {TaskClass.REVIEW_GATE, TaskClass.MERGE_GATE}:
+                    decisions = session.execute(
+                        select(GateDecisionModel.id).where(
+                            GateDecisionModel.project_id == project_id,
+                            GateDecisionModel.task_id == task_id,
+                            GateDecisionModel.outcome.in_(
+                                [GateDecisionOutcome.APPROVED, GateDecisionOutcome.APPROVED_WITH_RISK]
+                            ),
+                        )
+                    ).all()
+                    if not decisions:
+                        raise ValueError("GATE_DECISION_REQUIRED")
 
             if current == TaskState.CLAIMED:
                 self._release_active_lease(session, task_id)
@@ -517,6 +614,117 @@ class SqlStore:
                 )
             ).scalars().all()
             return [_event_to_dict(event) for event in events]
+
+    def list_entity_events(
+        self,
+        *,
+        project_id: str,
+        entity_type: str,
+        entity_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        with SessionLocal() as session:
+            query = select(EventLogModel).where(
+                EventLogModel.project_id == project_id,
+                EventLogModel.entity_type == entity_type,
+            )
+            if entity_id is not None:
+                query = query.where(EventLogModel.entity_id == entity_id)
+            events = session.execute(query).scalars().all()
+            return [_event_to_dict(event) for event in events]
+
+    def create_gate_rule(self, payload: dict[str, Any]) -> dict[str, Any]:
+        with SessionLocal.begin() as session:
+            rule = GateRuleModel(
+                project_id=payload["project_id"],
+                name=payload["name"],
+                scope=payload.get("scope", {}),
+                conditions=payload.get("conditions", {}),
+                required_evidence=payload.get("required_evidence", {}),
+                required_reviewer_roles=payload.get("required_reviewer_roles", []),
+                is_active=payload.get("is_active", True),
+                created_at=_now(),
+                updated_at=_now(),
+            )
+            session.add(rule)
+            session.flush()
+            return _gate_rule_to_dict(rule)
+
+    def create_gate_decision(self, payload: dict[str, Any]) -> dict[str, Any]:
+        with SessionLocal.begin() as session:
+            rule = session.get(GateRuleModel, payload["gate_rule_id"])
+            if rule is None or rule.project_id != payload["project_id"]:
+                raise KeyError("GATE_RULE_NOT_FOUND")
+
+            task_id = payload.get("task_id")
+            if task_id is not None:
+                task = session.get(TaskModel, task_id)
+                if task is None:
+                    raise KeyError("TASK_NOT_FOUND")
+                if task.project_id != payload["project_id"]:
+                    raise ValueError("PROJECT_MISMATCH")
+
+            phase_id = payload.get("phase_id")
+            if phase_id is not None:
+                phase = session.get(PhaseModel, phase_id)
+                if phase is None:
+                    raise KeyError("PHASE_NOT_FOUND")
+                if phase.project_id != payload["project_id"]:
+                    raise ValueError("PROJECT_MISMATCH")
+
+            if task_id is None and phase_id is None:
+                raise ValueError("GATE_SCOPE_REQUIRED")
+
+            try:
+                outcome = GateDecisionOutcome(payload["outcome"])
+            except ValueError as exc:
+                raise ValueError("INVALID_GATE_OUTCOME") from exc
+
+            decision = GateDecisionModel(
+                project_id=payload["project_id"],
+                gate_rule_id=payload["gate_rule_id"],
+                task_id=task_id,
+                phase_id=phase_id,
+                outcome=outcome,
+                actor_id=payload["actor_id"],
+                reason=payload["reason"],
+                evidence_refs=payload.get("evidence_refs", []),
+                created_at=_now(),
+            )
+            session.add(decision)
+            session.flush()
+
+            event = EventLogModel(
+                project_id=payload["project_id"],
+                entity_type="gate_decision",
+                entity_id=decision.id,
+                event_type="gate_decision_recorded",
+                payload=_gate_decision_to_dict(decision),
+                caused_by=payload["actor_id"],
+                correlation_id=None,
+                created_at=_now(),
+            )
+            session.add(event)
+            session.flush()
+
+            return _gate_decision_to_dict(decision)
+
+    def list_gate_decisions(
+        self,
+        *,
+        project_id: str,
+        task_id: str | None = None,
+        phase_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        with SessionLocal() as session:
+            query = select(GateDecisionModel).where(GateDecisionModel.project_id == project_id)
+            if task_id is not None:
+                query = query.where(GateDecisionModel.task_id == task_id)
+            if phase_id is not None:
+                query = query.where(GateDecisionModel.phase_id == phase_id)
+            rows = session.execute(
+                query.order_by(GateDecisionModel.created_at.desc(), GateDecisionModel.id.desc())
+            ).scalars().all()
+            return [_gate_decision_to_dict(row) for row in rows]
 
     def get_project_graph(self, project_id: str, include_completed: bool = True) -> dict[str, Any]:
         with SessionLocal() as session:
@@ -672,6 +880,171 @@ class SqlStore:
                 out.append(_task_to_dict(task))
 
             return sorted(out, key=lambda x: (x["priority"], x["created_at"] or ""))
+
+    def list_tasks(
+        self,
+        *,
+        project_id: str,
+        state: str | None = None,
+        phase_id: str | None = None,
+        capability: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        with SessionLocal() as session:
+            query = select(TaskModel).where(TaskModel.project_id == project_id)
+
+            if state is not None:
+                try:
+                    state_enum = TaskState(state)
+                except ValueError as exc:
+                    raise ValueError("INVALID_STATE") from exc
+                query = query.where(TaskModel.state == state_enum)
+
+            if phase_id is not None:
+                query = query.where(TaskModel.phase_id == phase_id)
+
+            tasks = session.execute(
+                query.order_by(TaskModel.priority.asc(), TaskModel.created_at.asc(), TaskModel.id.asc())
+            ).scalars().all()
+
+            if capability:
+                tasks = [task for task in tasks if capability in (task.capability_tags or [])]
+
+            total = len(tasks)
+            page = tasks[offset : offset + limit]
+            return ([_task_to_dict(task) for task in page], total)
+
+    def create_artifact(self, payload: dict[str, Any]) -> dict[str, Any]:
+        with SessionLocal.begin() as session:
+            task = session.get(TaskModel, payload["task_id"])
+            if task is None:
+                raise KeyError("TASK_NOT_FOUND")
+            if task.project_id != payload["project_id"]:
+                raise ValueError("PROJECT_MISMATCH")
+
+            current_max = session.execute(
+                select(func.max(ArtifactModel.artifact_number)).where(
+                    ArtifactModel.project_id == payload["project_id"],
+                    ArtifactModel.task_id == payload["task_id"],
+                )
+            ).scalar_one()
+            artifact_number = int(current_max or 0) + 1
+            short_id = f"{task.short_id}.A{artifact_number}" if task.short_id else None
+
+            check_status_raw = payload.get("check_status", "pending")
+            try:
+                check_status = CheckStatus(check_status_raw)
+            except ValueError as exc:
+                raise ValueError("INVALID_CHECK_STATUS") from exc
+
+            artifact = ArtifactModel(
+                project_id=payload["project_id"],
+                task_id=payload["task_id"],
+                agent_id=payload["agent_id"],
+                branch=payload.get("branch"),
+                commit_sha=payload.get("commit_sha"),
+                check_suite_ref=payload.get("check_suite_ref"),
+                check_status=check_status,
+                touched_files=payload.get("touched_files", []),
+                artifact_number=artifact_number,
+                short_id=short_id,
+            )
+            session.add(artifact)
+            session.flush()
+            return _artifact_to_dict(artifact)
+
+    def list_task_artifacts(self, *, project_id: str, task_id: str) -> list[dict[str, Any]]:
+        with SessionLocal() as session:
+            task = session.get(TaskModel, task_id)
+            if task is None:
+                raise KeyError("TASK_NOT_FOUND")
+            if task.project_id != project_id:
+                raise ValueError("PROJECT_MISMATCH")
+
+            artifacts = session.execute(
+                select(ArtifactModel)
+                .where(
+                    ArtifactModel.project_id == project_id,
+                    ArtifactModel.task_id == task_id,
+                )
+                .order_by(ArtifactModel.created_at.desc(), ArtifactModel.id.desc())
+            ).scalars().all()
+            return [_artifact_to_dict(artifact) for artifact in artifacts]
+
+    def enqueue_integration_attempt(self, payload: dict[str, Any]) -> dict[str, Any]:
+        with SessionLocal.begin() as session:
+            task = session.get(TaskModel, payload["task_id"])
+            if task is None:
+                raise KeyError("TASK_NOT_FOUND")
+            if task.project_id != payload["project_id"]:
+                raise ValueError("PROJECT_MISMATCH")
+
+            current_max = session.execute(
+                select(func.max(IntegrationAttemptModel.attempt_number)).where(
+                    IntegrationAttemptModel.project_id == payload["project_id"],
+                    IntegrationAttemptModel.task_id == payload["task_id"],
+                )
+            ).scalar_one()
+            attempt_number = int(current_max or 0) + 1
+            short_id = f"{task.short_id}.I{attempt_number}" if task.short_id else None
+
+            attempt = IntegrationAttemptModel(
+                project_id=payload["project_id"],
+                task_id=payload["task_id"],
+                base_sha=payload.get("base_sha"),
+                head_sha=payload.get("head_sha"),
+                result=IntegrationResult.QUEUED,
+                diagnostics=payload.get("diagnostics", {}),
+                attempt_number=attempt_number,
+                short_id=short_id,
+                started_at=_now(),
+                ended_at=None,
+            )
+            session.add(attempt)
+            session.flush()
+            return _integration_attempt_to_dict(attempt)
+
+    def update_integration_attempt(self, payload: dict[str, Any]) -> dict[str, Any]:
+        with SessionLocal.begin() as session:
+            attempt = session.get(IntegrationAttemptModel, payload["attempt_id"])
+            if attempt is None:
+                raise KeyError("INTEGRATION_ATTEMPT_NOT_FOUND")
+            if attempt.project_id != payload["project_id"]:
+                raise ValueError("PROJECT_MISMATCH")
+
+            result_raw = payload.get("result")
+            try:
+                result = IntegrationResult(result_raw)
+            except ValueError as exc:
+                raise ValueError("INVALID_INTEGRATION_RESULT") from exc
+
+            if result == IntegrationResult.QUEUED:
+                raise ValueError("STATE_NOT_ALLOWED")
+
+            attempt.result = result
+            attempt.diagnostics = payload.get("diagnostics", {})
+            attempt.ended_at = _now()
+            session.flush()
+            return _integration_attempt_to_dict(attempt)
+
+    def list_integration_attempts(self, *, project_id: str, task_id: str) -> list[dict[str, Any]]:
+        with SessionLocal() as session:
+            task = session.get(TaskModel, task_id)
+            if task is None:
+                raise KeyError("TASK_NOT_FOUND")
+            if task.project_id != project_id:
+                raise ValueError("PROJECT_MISMATCH")
+
+            attempts = session.execute(
+                select(IntegrationAttemptModel)
+                .where(
+                    IntegrationAttemptModel.project_id == project_id,
+                    IntegrationAttemptModel.task_id == task_id,
+                )
+                .order_by(IntegrationAttemptModel.started_at.desc(), IntegrationAttemptModel.id.desc())
+            ).scalars().all()
+            return [_integration_attempt_to_dict(attempt) for attempt in attempts]
 
     def current_plan_version_number(self, project_id: str) -> int:
         with SessionLocal() as session:
