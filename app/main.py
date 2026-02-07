@@ -1,5 +1,8 @@
+import pathlib
+
 from fastapi import FastAPI, HTTPException, Request, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.schemas import (
     ApplyPlanChangesetRequest,
@@ -810,3 +813,27 @@ def apply_plan_changeset(changeset_id: str, payload: ApplyPlanChangesetRequest |
         invalidated_claim_task_ids=invalid_claims,
         invalidated_reservation_task_ids=invalid_reservations,
     )
+
+
+# ---------------------------------------------------------------------------
+# Static file serving & SPA fallback
+# ---------------------------------------------------------------------------
+
+_WEB_DIST = pathlib.Path(__file__).resolve().parent.parent / "web" / "dist"
+
+if _WEB_DIST.is_dir():
+    # Serve hashed assets (JS/CSS) and any other static files under /assets
+    app.mount("/assets", StaticFiles(directory=_WEB_DIST / "assets"), name="static-assets")
+
+    @app.get("/vite.svg")
+    async def vite_icon() -> FileResponse:
+        return FileResponse(_WEB_DIST / "vite.svg", media_type="image/svg+xml")
+
+    @app.get("/{full_path:path}")
+    async def spa_fallback(full_path: str) -> FileResponse:
+        """Serve index.html for all non-API paths (SPA client-side routing)."""
+        # Try to serve an exact file match first (e.g. favicon, manifest)
+        candidate = _WEB_DIST / full_path
+        if full_path and candidate.is_file() and _WEB_DIST in candidate.resolve().parents:
+            return FileResponse(candidate)
+        return FileResponse(_WEB_DIST / "index.html", media_type="text/html")
