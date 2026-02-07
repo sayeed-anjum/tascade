@@ -48,7 +48,7 @@ describe("CheckpointList", () => {
     );
 
     renderCheckpointList();
-    expect(screen.getByText("Loading checkpoints...")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Loading checkpoints" })).toBeInTheDocument();
   });
 
   it("shows error state on API failure", async () => {
@@ -100,15 +100,13 @@ describe("CheckpointList", () => {
     expect(screen.getByText("2 checkpoints")).toBeInTheDocument();
   });
 
-  it("shows empty state when no checkpoints match filters", async () => {
+  it("shows empty state when no checkpoints exist", async () => {
     setupCheckpointsHandler([]);
 
     renderCheckpointList();
 
     await waitFor(() => {
-      expect(
-        screen.getByText("No checkpoints match the current filters."),
-      ).toBeInTheDocument();
+      expect(screen.getByText("No checkpoints")).toBeInTheDocument();
     });
   });
 

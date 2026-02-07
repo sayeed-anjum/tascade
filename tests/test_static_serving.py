@@ -4,12 +4,22 @@ Verifies that:
 - API endpoints (/v1/*, /health) are unaffected by the static mount
 - Static assets are served correctly from web/dist/
 - SPA fallback returns index.html for unknown client-side routes
+
+NOTE: These tests require `web/dist/` to exist (run `make build-web` first).
+The app module conditionally registers static routes based on whether
+web/dist/ is present at import time, so the test process must be started
+after the build.
 """
 
+import pathlib
+
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
 
+_WEB_DIST = pathlib.Path(__file__).resolve().parent.parent / "web" / "dist"
+_HAS_DIST = _WEB_DIST.is_dir()
 
 client = TestClient(app)
 
@@ -35,16 +45,21 @@ class TestApiRoutesUnaffected:
         assert body["error"]["code"] == "PROJECT_NOT_FOUND"
 
 
+@pytest.mark.skipif(not _HAS_DIST, reason="web/dist not built")
 class TestStaticAssets:
     """Hashed static assets under /assets/ must be served."""
 
     def test_css_asset_returns_200(self):
-        response = client.get("/assets/index-DpCr0HGY.css")
+        css_files = list((_WEB_DIST / "assets").glob("*.css"))
+        assert css_files, "No CSS file found in web/dist/assets"
+        response = client.get(f"/assets/{css_files[0].name}")
         assert response.status_code == 200
         assert "text/css" in response.headers["content-type"]
 
     def test_js_asset_returns_200(self):
-        response = client.get("/assets/index-DqvTHtkR.js")
+        js_files = list((_WEB_DIST / "assets").glob("*.js"))
+        assert js_files, "No JS file found in web/dist/assets"
+        response = client.get(f"/assets/{js_files[0].name}")
         assert response.status_code == 200
         assert "javascript" in response.headers["content-type"]
 
@@ -58,6 +73,7 @@ class TestStaticAssets:
         assert "svg" in response.headers["content-type"]
 
 
+@pytest.mark.skipif(not _HAS_DIST, reason="web/dist not built")
 class TestSpaFallback:
     """Non-API, non-asset paths must serve index.html for client-side routing."""
 

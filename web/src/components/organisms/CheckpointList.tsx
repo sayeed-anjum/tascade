@@ -3,6 +3,9 @@ import { useMemo, useState } from "react";
 import { useCheckpoints } from "@/api/hooks";
 import type { GateCheckpoint } from "@/api/types";
 import CheckpointRow from "@/components/molecules/CheckpointRow";
+import EmptyState from "@/components/molecules/EmptyState";
+import ErrorMessage from "@/components/molecules/ErrorMessage";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -13,6 +16,7 @@ import {
 import {
   Table,
   TableBody,
+  TableCell,
   TableHead,
   TableHeader,
   TableRow,
@@ -44,7 +48,7 @@ interface CheckpointListProps {
 }
 
 export default function CheckpointList({ projectId }: CheckpointListProps) {
-  const { data, isLoading, isError, error } = useCheckpoints(projectId);
+  const { data, isLoading, isError, error, refetch } = useCheckpoints(projectId);
 
   // Filter and sort state.
   const [gateTypeFilter, setGateTypeFilter] = useState<GateTypeFilter>("all");
@@ -85,23 +89,56 @@ export default function CheckpointList({ projectId }: CheckpointListProps) {
 
   if (isLoading) {
     return (
-      <div className="mt-4">
-        <p className="text-muted-foreground">Loading checkpoints...</p>
+      <div role="status" aria-label="Loading checkpoints" className="mt-4 space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <Skeleton className="h-8 w-24" />
+          <Skeleton className="h-8 w-28" />
+          <Skeleton className="h-8 w-28" />
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Task</TableHead>
+              <TableHead>Gate Type</TableHead>
+              <TableHead>Readiness</TableHead>
+              <TableHead>Age</TableHead>
+              <TableHead>SLA</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Array.from({ length: 4 }, (_, i) => (
+              <TableRow key={i}>
+                <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-12" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Error state.
-  // ---------------------------------------------------------------------------
-
   if (isError) {
     return (
       <div className="mt-4">
-        <p className="text-destructive">
-          Failed to load checkpoints
-          {error instanceof Error ? `: ${error.message}` : "."}
-        </p>
+        <ErrorMessage
+          message={`Failed to load checkpoints${error instanceof Error ? `: ${error.message}` : ""}`}
+          onRetry={() => refetch()}
+        />
+      </div>
+    );
+  }
+
+  if ((data?.items ?? []).length === 0) {
+    return (
+      <div className="mt-4">
+        <EmptyState
+          title="No checkpoints"
+          description="Gate checkpoints will appear here when tasks have associated gate rules."
+        />
       </div>
     );
   }
