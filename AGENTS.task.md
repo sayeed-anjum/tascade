@@ -44,6 +44,8 @@ For any assigned task with a Tascade `short_id`:
 2. Do not combine changes for multiple tracked short-ID tasks in one uncommitted working tree.
 3. Before `in_progress -> implemented`, ensure at least one commit exists for the task lane.
 4. Artifact package must reference the actual committed branch head SHA for that task.
+5. Do not commit tracked task changes directly to integration branches (for example `main`/`dev`).
+6. Treat `implemented` as review-ready only; merge happens after explicit reviewer approval through orchestrator flow.
 
 ## Artifact Package (Required before `implemented`)
 
@@ -81,8 +83,10 @@ Escalate to orchestrator (do not force progress) when:
 - policy or review/gate decisions are needed,
 - task scope appears to require plan changes.
 - any uncertainty exists about review/policy authority boundaries.
+- any tracked-task commit is accidentally made directly on an integration branch.
 
 ## Review and Integration Boundary
 
 - After setting `implemented`, notify orchestrator with concise completion summary.
 - Orchestrator/human reviewer owns review collection, reviewer identity confirmation, and `implemented -> integrated` transition.
+- If an accidental direct integration-branch commit occurs, pause and escalate immediately; do not continue task progression until remediation is agreed.

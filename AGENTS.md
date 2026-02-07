@@ -82,6 +82,8 @@ For any task with a Tascade `short_id`, provenance must be isolated and commit-b
 3. Before transitioning a tracked task to `implemented`, create at least one commit containing that task's scoped changes.
 4. The `implemented` artifact package must reference the real commit SHA from that task's branch head (not a placeholder/uncommitted SHA).
 5. If work was accidentally mixed across tasks in one worktree, split the changes into task-specific branches/commits first, then update task states.
+6. For tracked short-ID tasks, do not commit directly to integration branches (for example `main` or `dev`); use a task branch/worktree and merge only after review approval.
+7. `implemented` status does not authorize direct integration-branch commits; it only signals review readiness.
 
 Allowed exceptions:
 
@@ -142,6 +144,18 @@ Before or at commit time for any claimed task:
    - Offer to generate a focused diff summary and risk checklist for faster review.
 10. Use a clear reason in each transition (for auditability).
 11. Confirm final task state is `integrated` via `get_task(task_id)`.
+12. Before any merge to integration branch, verify explicit reviewer approval is present in-thread and references the exact head SHA being merged.
+
+## Direct-Commit Violation Remediation (Required)
+
+If a tracked task commit lands on an integration branch before review approval:
+
+1. Stop further integration-branch commits for that task immediately.
+2. Create/claim a remediation task in Tascade and record the violating commit SHA(s).
+3. Revert the violating commit(s) from the integration branch (or otherwise remove them from the branch tip) before proceeding.
+4. Reapply the exact scoped changes on a task branch/worktree, preserving traceable commit linkage.
+5. Run verification again, publish artifact package, and request explicit reviewer approval.
+6. Merge only after approval, then continue normal `implemented -> integrated` transition.
 
 ## Current Structure (Initialized)
 
