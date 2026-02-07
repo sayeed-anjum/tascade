@@ -32,16 +32,21 @@ When working in this repository, prefer the Tascade MCP tools for project coordi
 Before or at commit time for any claimed task:
 
 1. Verify implementation/tests are complete for the scoped task.
-2. Transition task state through completion path:
+2. Publish task artifacts before `implemented` transition (required for new work):
+   - branch name
+   - head commit SHA (and base SHA if available)
+   - check/CI reference and status
+   - touched files list
+3. Transition task state through completion path:
    - `in_progress` (if not already)
    - `implemented`
    - `integrated` only after review approval.
-3. For `implemented -> integrated`, provide `reviewed_by`:
+4. For `implemented -> integrated`, provide `reviewed_by`:
    - Must be non-empty.
    - Must not equal `actor_id` (no self-review).
-4. Use a clear reason in each transition (for auditability).
-5. Confirm final task state is `integrated` via `get_task(task_id)`.
-6. Only then create/finalize the commit.
+5. Use a clear reason in each transition (for auditability).
+6. Confirm final task state is `integrated` via `get_task(task_id)`.
+7. Only then create/finalize the commit.
 
 ## Current Structure (Initialized)
 
