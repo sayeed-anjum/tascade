@@ -4,6 +4,29 @@ Product: Agentic Task Orchestration System (working name: Tascade)
 Date: 2026-02-06
 Status: Draft
 
+## 0. Status Sync Addendum (2026-02-07)
+
+This PRD remains the product baseline; implementation status has advanced materially since initial drafting.
+
+Current project snapshot (`66b79018-c5e0-4880-864e-e2462be613d2`):
+- Total tasks: `46`
+- `integrated`: `39`
+- `ready`: `6`
+- `claimed`: `1`
+- `implemented`: `0`
+
+What is now achieved against this PRD:
+- Core orchestration substrate goals (`G1`, `G2`, `G3`) are operational in production code paths.
+- Governance workflow (`G4`) is implemented through gate decisions, policy-driven gate generation, and enforced review evidence for `implemented -> integrated`.
+- Artifact and integration-attempt primitives are live (`FR-8`, `FR-9`).
+- Policy-generated checkpoints are implemented (`FR-32`) with gate classes and lifecycle behavior.
+
+What still needs attention to close v1:
+- Checkpoint read model and UI lane (`FR-35` visualization intent) are pending in `P3.M3`.
+- Project-scoped auth/role enforcement (`FR-17`, security NFR alignment) is pending in `P3.M3.T3`.
+- Observability completeness (`NFR-5`, success-metric instrumentation coverage) is pending in `P3.M3.T4`.
+- MCP ready-task capability payload ergonomics need hardening (`P3.M3.T6`).
+
 ## 1. Purpose
 
 Build a task orchestration platform for distributed AI software agents that:

@@ -48,3 +48,36 @@ Recommended planning order:
 3. Umbrella rollup report.
 4. Historical backfill.
 
+## Additional Brainstorm (Status Sync 2026-02-07)
+
+### Proposal 5: Gate Policy Dry-Run Simulator
+
+Add a simulation endpoint/UI mode that evaluates gate policies without creating tasks, so operators can tune thresholds before rollout.
+
+Expected value:
+- Safer policy tuning.
+- Lower chance of gate-noise regressions.
+
+### Proposal 6: Reviewer Workload Balancer
+
+Add reviewer routing logic that assigns/queues gate checkpoints based on active load, SLA age, and capability tags.
+
+Expected value:
+- Better reviewer throughput.
+- Reduced gate aging bottlenecks.
+
+### Proposal 7: Integration Conflict Risk Scoring
+
+Compute a pre-merge risk score from touched paths, dependency fan-in, and historical conflict data to prioritize integration order.
+
+Expected value:
+- Earlier conflict discovery.
+- Better merge queue ordering.
+
+### Proposal 8: Release Readiness Report API
+
+Add a single report endpoint for phase/milestone readiness: gate backlog, implemented-age risk, integration outcomes, and blocking dependencies.
+
+Expected value:
+- Faster go/no-go decisions.
+- Shared status truth for human reviewers and orchestrators.
