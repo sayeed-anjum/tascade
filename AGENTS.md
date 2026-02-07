@@ -27,6 +27,26 @@ When working in this repository, prefer the Tascade MCP tools for project coordi
    - `create_plan_changeset(...)`
    - `apply_plan_changeset(changeset_id, allow_rebase=false)`
 
+## Work Traceability Rule (Required)
+
+Any substantial work in this repository must have a corresponding Tascade task before implementation begins.
+
+- Substantial work includes:
+  - code changes spanning multiple files,
+  - schema or migration changes,
+  - API/MCP behavior changes,
+  - production-facing bug fixes,
+  - any work expected to take more than a quick typo/doc fix.
+- Required workflow:
+  1. Find an existing scoped task (`list_ready_tasks`) or create one (`create_task`).
+  2. Claim it (`claim_task`) before implementation.
+  3. Keep status transitions/audit trail updated per close-out checklist.
+- Allowed lightweight exceptions (no pre-task required):
+  - typo-only docs edits,
+  - formatting/comment-only changes,
+  - local exploratory debugging with no durable code changes.
+- If emergency work starts before task creation (for example incident mitigation), create and link the task immediately after stabilization in the same session, and record reason in transition notes.
+
 ## Task Close-out Checklist (Required)
 
 Before or at commit time for any claimed task:

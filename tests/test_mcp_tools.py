@@ -16,12 +16,14 @@ def test_mcp_setup_and_execution_flow():
     project_id = project["id"]
 
     phase = mcp_tools.create_phase(project_id=project_id, name="Phase 1", sequence=0)
+    assert phase["short_id"] == "P1"
     milestone = mcp_tools.create_milestone(
         project_id=project_id,
         name="Milestone 1",
         sequence=0,
         phase_id=phase["id"],
     )
+    assert milestone["short_id"] == "P1.M1"
 
     task_a = mcp_tools.create_task(
         project_id=project_id,
@@ -41,6 +43,8 @@ def test_mcp_setup_and_execution_flow():
         phase_id=phase["id"],
         milestone_id=milestone["id"],
     )
+    assert task_a["short_id"] == "P1.M1.T1"
+    assert task_b["short_id"] == "P1.M1.T2"
 
     dep = mcp_tools.create_dependency(
         project_id=project_id,
@@ -56,6 +60,9 @@ def test_mcp_setup_and_execution_flow():
     assert len(graph["milestones"]) == 1
     assert len(graph["tasks"]) == 2
     assert len(graph["dependencies"]) == 1
+    assert graph["phases"][0]["short_id"] == "P1"
+    assert graph["milestones"][0]["short_id"] == "P1.M1"
+    assert {task["short_id"] for task in graph["tasks"]} == {"P1.M1.T1", "P1.M1.T2"}
 
     ready = mcp_tools.list_ready_tasks(project_id=project_id, agent_id="agent-1", capabilities=["backend"])
     ready_ids = {x["id"] for x in ready["items"]}

@@ -61,6 +61,7 @@ def _project_to_dict(model: ProjectModel) -> dict[str, Any]:
 def _task_to_dict(model: TaskModel) -> dict[str, Any]:
     return {
         "id": model.id,
+        "short_id": model.short_id,
         "project_id": model.project_id,
         "phase_id": model.phase_id,
         "milestone_id": model.milestone_id,
@@ -85,6 +86,7 @@ def _task_to_dict(model: TaskModel) -> dict[str, Any]:
 def _phase_to_dict(model: PhaseModel) -> dict[str, Any]:
     return {
         "id": model.id,
+        "short_id": model.short_id,
         "project_id": model.project_id,
         "name": model.name,
         "sequence": model.sequence,
@@ -96,6 +98,7 @@ def _phase_to_dict(model: PhaseModel) -> dict[str, Any]:
 def _milestone_to_dict(model: MilestoneModel) -> dict[str, Any]:
     return {
         "id": model.id,
+        "short_id": model.short_id,
         "project_id": model.project_id,
         "phase_id": model.phase_id,
         "name": model.name,
@@ -264,7 +267,17 @@ class SqlStore:
 
     def create_phase(self, project_id: str, name: str, sequence: int) -> dict[str, Any]:
         with SessionLocal.begin() as session:
-            phase = PhaseModel(project_id=project_id, name=name, sequence=sequence)
+            current_max = session.execute(
+                select(func.max(PhaseModel.phase_number)).where(PhaseModel.project_id == project_id)
+            ).scalar_one()
+            next_phase_number = int(current_max or 0) + 1
+            phase = PhaseModel(
+                project_id=project_id,
+                name=name,
+                sequence=sequence,
+                phase_number=next_phase_number,
+                short_id=f"P{next_phase_number}",
+            )
             session.add(phase)
             session.flush()
             return _phase_to_dict(phase)
@@ -277,11 +290,28 @@ class SqlStore:
         phase_id: str | None = None,
     ) -> dict[str, Any]:
         with SessionLocal.begin() as session:
+            milestone_number: int | None = None
+            short_id: str | None = None
+            if phase_id is not None:
+                phase = session.get(PhaseModel, phase_id)
+                if phase is None or phase.project_id != project_id:
+                    raise KeyError("PHASE_NOT_FOUND")
+                current_max = session.execute(
+                    select(func.max(MilestoneModel.milestone_number)).where(
+                        MilestoneModel.project_id == project_id,
+                        MilestoneModel.phase_id == phase_id,
+                    )
+                ).scalar_one()
+                milestone_number = int(current_max or 0) + 1
+                if phase.short_id:
+                    short_id = f"{phase.short_id}.M{milestone_number}"
             milestone = MilestoneModel(
                 project_id=project_id,
                 phase_id=phase_id,
                 name=name,
                 sequence=sequence,
+                milestone_number=milestone_number,
+                short_id=short_id,
             )
             session.add(milestone)
             session.flush()
@@ -289,10 +319,28 @@ class SqlStore:
 
     def create_task(self, payload: dict[str, Any]) -> dict[str, Any]:
         with SessionLocal.begin() as session:
+            milestone_id = payload.get("milestone_id")
+            task_number: int | None = None
+            short_id: str | None = None
+            if milestone_id is not None:
+                milestone = session.get(MilestoneModel, milestone_id)
+                if milestone is None or milestone.project_id != payload["project_id"]:
+                    raise KeyError("MILESTONE_NOT_FOUND")
+                current_max = session.execute(
+                    select(func.max(TaskModel.task_number)).where(
+                        TaskModel.project_id == payload["project_id"],
+                        TaskModel.milestone_id == milestone_id,
+                    )
+                ).scalar_one()
+                task_number = int(current_max or 0) + 1
+                if milestone.short_id:
+                    short_id = f"{milestone.short_id}.T{task_number}"
             task = TaskModel(
                 project_id=payload["project_id"],
                 phase_id=payload.get("phase_id"),
-                milestone_id=payload.get("milestone_id"),
+                milestone_id=milestone_id,
+                task_number=task_number,
+                short_id=short_id,
                 title=payload["title"],
                 description=payload.get("description"),
                 state=TaskState.READY,

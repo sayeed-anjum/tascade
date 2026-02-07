@@ -114,6 +114,8 @@ class PhaseModel(Base):
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    phase_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    short_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
 
@@ -130,6 +132,8 @@ class MilestoneModel(Base):
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    milestone_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    short_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
 
@@ -143,6 +147,8 @@ class TaskModel(Base):
     )
     phase_id: Mapped[str | None] = mapped_column(UUID_TEXT, nullable=True)
     milestone_id: Mapped[str | None] = mapped_column(UUID_TEXT, nullable=True)
+    task_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    short_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     state: Mapped[TaskState] = mapped_column(

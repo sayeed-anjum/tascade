@@ -64,6 +64,7 @@ class CreateTaskRequest(BaseModel):
 
 class Task(BaseModel):
     id: str
+    short_id: str | None = None
     project_id: str
     phase_id: str | None = None
     milestone_id: str | None = None
