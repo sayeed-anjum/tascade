@@ -46,6 +46,7 @@ For any assigned task with a Tascade `short_id`:
 4. Artifact package must reference the actual committed branch head SHA for that task.
 5. Do not commit tracked task changes directly to integration branches (for example `main`/`dev`).
 6. Treat `implemented` as review-ready only; merge happens after explicit reviewer approval through orchestrator flow.
+7. Do not use integration branches (`main`/`dev`) in linked worktrees; linked worktrees are for task branches only.
 
 ## Artifact Package (Required before `implemented`)
 
@@ -84,6 +85,7 @@ Escalate to orchestrator (do not force progress) when:
 - task scope appears to require plan changes.
 - any uncertainty exists about review/policy authority boundaries.
 - any tracked-task commit is accidentally made directly on an integration branch.
+- any linked worktree is found to have `main`/`dev` checked out.
 
 ## Review and Integration Boundary
 
