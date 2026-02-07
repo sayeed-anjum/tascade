@@ -1,183 +1,138 @@
-# Web UI Read-Console Implementation Plan v0.1
+# Web UI Implementation Plan v0.2 (P4 Baseline)
 
 Date: 2026-02-07
-Scope: Tascade UI v1
-Target: Separate React app (Vite), read-mostly operations console
+Program: `P4 - Phase 4 - Web UI Product Surface`
+Task Anchor: `P4.M1.T1`
 
-## 1. Plan Goal
+## 1. Objective
 
-Deliver a production-usable web UI that supports:
-- project discovery,
-- task board visibility (Kanban),
-- checkpoint visibility,
-- deep task evidence inspection,
-while keeping mutation actions out of scope for v1.
+Deliver a read-first web UI for projects, tasks, checkpoints, and evidence using:
+- React + TypeScript + Vite,
+- TanStack Query,
+- shadcn/ui,
+- Atomic Design.
 
-## 2. Current Baseline and Delta
+## 2. Authoritative P4 Milestones
 
-### 2.1 Existing relevant work
+### P4.M1 - UX Foundations and Read APIs
 
-Already integrated:
-- `P3.M3.T6` (`list_ready_tasks` input hardening).
-- Core task/artifact/integration/gate APIs.
+Target outcome:
+- Backend read-model parity exists for the UI.
+- Frontend app scaffold and architectural guardrails are in place.
 
-Already planned/ready:
-- `P3.M3.T1` checkpoints endpoint (`/v1/gates/checkpoints`).
-- `P3.M3.T2` checkpoint lane UI task (currently conceptual; no frontend repo yet).
-- `P3.M3.T3` auth and role scopes.
-- `P3.M3.T4` observability.
+Planned task lanes:
+1. `P4.M1` API lane
+- Add `GET /v1/projects` and `GET /v1/projects/{project_id}`.
+- Add `GET /v1/projects/{project_id}/graph`.
+- Add `GET /v1/tasks/{task_ref}/context` with short-id support.
+- Complete and validate `GET /v1/gates/checkpoints` integration.
 
-### 2.2 Missing for UI v1 delivery
+2. `P4.M1` frontend foundation lane
+- Bootstrap Vite React TS app.
+- Install/configure TanStack Query.
+- Initialize shadcn/ui and shared design tokens.
+- Enforce atomic folder boundaries and lint rules.
 
-New backend read endpoints are required:
-- projects list/read,
-- project graph read endpoint,
-- task context read endpoint.
+Exit criteria:
+- APIs documented + tested.
+- Frontend compiles/tests/lints.
+- Mock-wired routes exist for `/projects`, `/projects/:projectId/tasks`, `/projects/:projectId/checkpoints`.
 
-A frontend workspace/app does not yet exist and must be scaffolded.
+### P4.M2 - Kanban Experience and Task Intelligence
 
-## 3. Recommended Program Structure
+Target outcome:
+- Full read-first workflow for reviewer and orchestrator.
 
-Recommend adding a dedicated execution phase for UI v1 (or equivalent milestone extension):
+Planned task lanes:
+1. Projects discovery
+- Searchable projects list with health counters.
 
-- Phase: `Phase 3 - Web UI v1 Delivery`
-- Milestone A: API Read Models and Contracts
-- Milestone B: Frontend Foundation and Core Views
-- Milestone C: Hardening, Access, and Acceptance
+2. Workspace and Kanban
+- Workspace shell with Tasks/Checkpoints tabs.
+- State-column Kanban with filter stack (phase, milestone, state, class, capability, text).
+- Configurable default visibility for terminal states.
 
-## 4. Work Breakdown
+3. Task intelligence panel
+- Drawer/side panel with overview/work spec/dependencies.
+- Evidence panels: artifacts, integration attempts, gate decisions.
+- Deep-link and keyboard-access behavior.
 
-## Milestone A: API Read Models and Contracts
+4. Checkpoint workflow view
+- Checkpoint list by type/readiness/age.
+- Jump from checkpoint entry to related task details.
 
-A1. Add REST projects read endpoints
-- `GET /v1/projects`
-- `GET /v1/projects/{project_id}`
+Exit criteria:
+- Reviewer can complete project -> board -> task evidence flow.
+- Checkpoint -> task drill-down works consistently.
+- Component and integration tests cover primary interactions.
 
-A2. Add REST project graph endpoint
-- `GET /v1/projects/{project_id}/graph?include_completed=...`
-- return shape aligned with existing `get_project_graph` MCP response.
+### P4.M3 - Hardening, Security, and Rollout
 
-A3. Add REST task context endpoint
-- `GET /v1/tasks/{task_ref}/context?...`
-- support UUID and short ID references.
+Target outcome:
+- Production-safe release candidate with quality and governance gates satisfied.
 
-A4. Complete checkpoints endpoint (`P3.M3.T1`)
-- include gate metadata, readiness summary, and candidate references.
+Planned task lanes:
+1. Security and access
+- API-key path verified for secured deployments.
+- Role-scoped visibility constraints honored in UI.
 
-A5. Contract docs and tests
-- update OpenAPI
-- add API tests for all new read endpoints and short-id behavior.
+2. Reliability and performance
+- Virtualization thresholds tuned for large boards.
+- Caching/refetch behavior tuned to avoid overfetch.
+- Loading/error/empty states finalized for all primary surfaces.
 
-Dependencies:
-- A4 depends on existing gate linkage data model readiness.
+3. Observability and acceptance
+- Frontend telemetry for route load and key interactions.
+- Explicit acceptance checkpoint with reviewer sign-off.
 
-## Milestone B: Frontend Foundation and Core Views
+Exit criteria:
+- e2e smoke suite green.
+- Accessibility baseline met (keyboard + focus + contrast).
+- Acceptance gate approved and integrated.
 
-B1. Bootstrap frontend app
-- Vite + React + TypeScript
-- shadcn/ui setup
-- TanStack Query setup
-- atomic design folder structure (`atoms`, `molecules`, `organisms`, `templates`, `pages`)
+## 3. Dependencies and Sequencing
 
-B2. Build projects list page
-- searchable table/list
-- project navigation into workspace.
+Hard dependencies:
+1. `P4.M1` API lane must complete before `P4.M2` full-feature implementation.
+2. `P4.M2` must complete before `P4.M3` acceptance.
 
-B3. Build project workspace shell
-- tab navigation: Tasks / Checkpoints
-- shared filter bar and task detail drawer host.
+Parallelization opportunities:
+- API read endpoints and frontend scaffold can run in parallel within `P4.M1`.
+- In `P4.M2`, Kanban and checkpoints UI can proceed in parallel after shared shell contracts settle.
 
-B4. Build tasks Kanban view
-- state columns
-- card rendering
-- filters and sorting.
+## 4. Risks and Mitigations
 
-B5. Build task detail drawer
-- core metadata + work spec
-- dependency context
-- artifacts/integration attempts/gate decisions panels.
+1. API/model drift between REST and MCP read semantics.
+- Mitigation: parity tests on short ID, state, milestone/phase fields.
 
-B6. Build checkpoints view
-- checkpoint list/grid
-- navigate from checkpoint to related task details.
+2. Board performance degradation on large projects.
+- Mitigation: virtualization + progressive section fetch in detail panel.
 
-Dependencies:
-- B2-B6 depend on Milestone A endpoints.
+3. Scope creep into write operations.
+- Mitigation: explicit v1 read-only gate in PR review checklist.
 
-## Milestone C: Hardening, Access, and Acceptance
+4. Visual inconsistency and component sprawl.
+- Mitigation: strict atomic design boundaries + shadcn primitive-first policy.
 
-C1. Integrate backend auth constraints (`P3.M3.T3`)
-- API key handling and role-aware view restrictions.
+## 5. Verification Plan
 
-C2. Add observability hooks (`P3.M3.T4`)
-- frontend instrumentation for route loads and key interactions.
+Per milestone:
+- `P4.M1`: API contract tests + frontend scaffold CI checks.
+- `P4.M2`: component/integration tests + manual reviewer journey smoke.
+- `P4.M3`: e2e smoke + accessibility checks + performance sanity pass.
 
-C3. Performance and UX hardening
-- large-board rendering strategy (virtualization threshold)
-- loading/error state polish
-- accessibility pass.
+Global done checks:
+- No mutation controls exposed.
+- Short IDs visible in all critical UI list/detail surfaces.
+- Checkpoint-to-evidence path <= 3 primary interactions.
 
-C4. Test suite completion
-- unit + component tests
-- e2e smoke flows for core user journeys.
+## 6. Brainstormed Post-v1 Backlog (not in P4 baseline)
 
-C5. Final acceptance gate (`P3.M3.T5`)
-- human validation of reviewer workflow in UI.
+Candidate P5/v2 themes:
+1. Controlled write actions (claim, assign, transition) with role-safe UX.
+2. Timeline/activity feed for task/gate decision history.
+3. Cross-project dashboards and SLA heatmaps.
+4. Diff-aware artifact viewer for commit and touched-file analysis.
+5. Notification center for aging implemented tasks and pending checkpoints.
 
-## 5. Delivery Sequence (Recommended)
-
-1. Finish Milestone A completely first (API-readiness-first).
-2. Execute Milestone B with incremental visible slices:
-- projects list,
-- tasks board,
-- drawer,
-- checkpoints.
-3. Finish Milestone C for auth, quality, and acceptance.
-
-## 6. Verification Plan
-
-Per milestone verification:
-
-Milestone A:
-- API tests pass for new read endpoints.
-- OpenAPI updated and lint-valid.
-
-Milestone B:
-- Frontend build/test/lint pass.
-- Manual smoke: projects -> board -> task drawer -> checkpoints.
-
-Milestone C:
-- Auth behavior verified against role constraints.
-- Accessibility checklist baseline satisfied.
-- Performance checks for representative task volume.
-
-## 7. Risks and Controls
-
-- API drift risk between MCP/store and REST responses.
-  - Control: parity tests comparing canonical fields.
-
-- Board complexity creep.
-  - Control: enforce read-only v1 and reject mutation UI additions.
-
-- Data payload size on large projects.
-  - Control: progressive loading and optional pagination/virtualization.
-
-## 8. Suggested Next Task Creation Set
-
-Create these new tracked tasks before implementation starts:
-
-1. `Web UI API Read Endpoints Bundle` (A1-A3)
-2. `Web UI Frontend Scaffold + Design System` (B1)
-3. `Projects List + Workspace Shell` (B2-B3)
-4. `Kanban Board + Filters` (B4)
-5. `Task Detail Drawer + Evidence Panels` (B5)
-6. `Checkpoints View` (B6)
-7. `Auth + Observability + Acceptance` (C1-C5)
-
-## 9. Done Criteria for UI v1
-
-UI v1 is done when:
-- all milestone tasks are integrated,
-- no mutation controls are exposed,
-- reviewer can complete read-only triage flow end-to-end,
-- acceptance checkpoint is explicitly approved and integrated.
+These are intentionally excluded from `P4` to keep v1 delivery focused.

@@ -1,102 +1,73 @@
-# Web UI Software Requirements Specification (SRS) v0.1
+# Web UI Software Requirements Specification (SRS) v0.2
 
-System: Tascade Web UI (Read-Mostly Console)
+System: Tascade Web UI (Read-First Console)
 Date: 2026-02-07
 Status: Draft
+Program Phase: `P4`
 
-## 1. Overview
+## 1. Technology Baseline (locked)
 
-This SRS defines technical requirements for a React-based web UI for Tascade, optimized for project/task visibility and reviewer triage.
+- Build/runtime: Vite + React + TypeScript.
+- Data fetching/cache: TanStack Query (React Query).
+- UI components: shadcn/ui.
+- Component architecture: Atomic Design.
 
-## 2. Technology Baseline
+Required structure:
+- `src/components/atoms`
+- `src/components/molecules`
+- `src/components/organisms`
+- `src/components/templates`
+- `src/pages`
 
-- Runtime/build: Vite + React + TypeScript.
-- Data layer: TanStack Query.
-- UI library: shadcn/ui.
-- UI architecture: Atomic design (`atoms`, `molecules`, `organisms`, `templates`, `pages`).
-- API source: FastAPI REST endpoints (same service as existing backend).
-
-## 3. Frontend Information Architecture
+## 2. Information Architecture
 
 Routes:
 - `/projects`
 - `/projects/:projectId/tasks`
 - `/projects/:projectId/checkpoints`
 
-Shared shell:
-- Top app bar
-- Project selector/breadcrumb
-- Global filter bar
-- Right-side task detail drawer
+Shell elements:
+- Top app bar + breadcrumb/project context,
+- filter rail/bar,
+- task detail drawer/side panel host.
 
-## 4. Component Architecture (Atomic Design)
+## 3. Atomic Component Model
 
-### 4.1 Atoms
+Atoms:
+- `ShortIdText`, `StatusBadge`, `PriorityBadge`, `TaskClassBadge`, `EmptyState`, `ErrorState`, `LoadingSkeleton`.
 
-- `StatusBadge`
-- `TaskClassBadge`
-- `PriorityPill`
-- `ShortId`
-- `Timestamp`
-- `EmptyState`
-- `ErrorState`
-- `SkeletonLine/Card`
+Molecules:
+- `TaskCardHeader`, `TaskCardMeta`, `FilterGroup`, `EvidenceListItem`, `SectionHeader`.
 
-### 4.2 Molecules
+Organisms:
+- `ProjectsListTable`, `KanbanBoard`, `KanbanColumn`, `TaskCard`, `TaskDetailDrawer`, `CheckpointList`, `DependencyPanel`, `ArtifactsPanel`, `IntegrationAttemptsPanel`, `GateDecisionsPanel`.
 
-- `TaskCardHeader`
-- `TaskCardMeta`
-- `FilterChip`
-- `FilterGroup`
-- `SectionHeader`
-- `EvidenceItem`
+Templates/Pages:
+- `ProjectsPageTemplate`, `ProjectWorkspaceTemplate`, `TasksBoardPage`, `CheckpointsPage`.
 
-### 4.3 Organisms
+## 4. Query and Cache Model (TanStack Query)
 
-- `ProjectsTable`
-- `TaskKanbanColumn`
-- `TaskKanbanBoard`
-- `CheckpointList`
-- `TaskDetailDrawer`
-- `DependencyGraphList`
-- `ArtifactsPanel`
-- `IntegrationAttemptsPanel`
-- `GateDecisionsPanel`
-
-### 4.4 Templates/Pages
-
-- `ProjectsPageTemplate`
-- `ProjectWorkspaceTemplate`
-- `TasksBoardPage`
-- `CheckpointsPage`
-
-## 5. Data and Query Model
-
-### 5.1 Query keys
-
+Required query keys:
 - `['projects']`
 - `['project', projectId]`
 - `['projectGraph', projectId, includeCompleted]`
 - `['tasks', projectId, filters]`
 - `['task', taskRef]`
 - `['taskContext', projectId, taskRef, ancestorDepth, dependentDepth]`
-- `['artifacts', projectId, taskRef]`
-- `['integrationAttempts', projectId, taskRef]`
-- `['gateDecisions', projectId, taskRef?, phaseId?]`
+- `['artifacts', taskRef]`
+- `['integrationAttempts', taskRef]`
+- `['gateDecisions', projectId, scope]`
 - `['checkpoints', projectId, filters]`
 
-### 5.2 Query behavior
+Required defaults:
+- board/checkpoints stale time: 10s,
+- detail/evidence stale time: 15s,
+- projects/project summary stale time: 30s,
+- focus refetch enabled for board/checkpoints/detail.
 
-- `staleTime`:
-  - projects/project summary: 30s
-  - tasks board/checkpoints: 10s
-  - task details/evidence: 15s
-- `refetchOnWindowFocus`: enabled for board/checkpoint/detail queries.
-- Progressive loading: board first, detail/evidence on drawer open.
+## 5. API Contract Requirements
 
-## 6. API Contract Requirements
-
-### 6.1 Existing REST endpoints to use directly
+### Existing endpoints to consume
 
 - `GET /v1/tasks`
 - `GET /v1/tasks/{task_id}`
@@ -104,114 +75,85 @@ Shared shell:
 - `GET /v1/tasks/{task_id}/integration-attempts`
 - `GET /v1/gate-decisions`
 
-### 6.2 Required REST additions for UI v1
+### Required read endpoints for P4 completeness
 
-1. `GET /v1/projects`
-- returns list of projects.
+- `GET /v1/projects`
+- `GET /v1/projects/{project_id}`
+- `GET /v1/projects/{project_id}/graph?include_completed=...`
+- `GET /v1/tasks/{task_ref}/context?project_id=...&ancestor_depth=...&dependent_depth=...`
+- `GET /v1/gates/checkpoints?project_id=...`
 
-2. `GET /v1/projects/{project_id}`
-- returns project metadata.
+Contract requirements:
+- accept UUID and short ID task references where applicable,
+- return stable domain codes on errors,
+- preserve short IDs in all list/detail payloads.
 
-3. `GET /v1/projects/{project_id}/graph?include_completed=...`
-- REST parity for `get_project_graph` MCP/store read.
+## 6. Board Semantics
 
-4. `GET /v1/tasks/{task_ref}/context?project_id=...&ancestor_depth=...&dependent_depth=...`
-- REST parity for task context read, with short-id-aware `task_ref` support.
-
-5. `GET /v1/gates/checkpoints?project_id=...`
-- checkpoint-focused gate read model (already represented by `P3.M3.T1`).
-
-### 6.3 Optional consolidation endpoint (nice-to-have)
-
-`GET /v1/projects/{project_id}/workspace`
-- aggregated initial payload for project header counters and lightweight board bootstrap.
-
-## 7. State/Board Semantics
-
-Canonical task states for board columns:
+Canonical states:
 - `backlog`, `ready`, `reserved`, `claimed`, `in_progress`, `implemented`, `integrated`, `conflict`, `blocked`, `abandoned`, `cancelled`.
 
-Default visible columns in v1:
+Default visible columns:
 - `ready`, `claimed`, `in_progress`, `implemented`, `conflict`, `blocked`.
 
-Collapsed/hidden by default:
+Default collapsed/hidden:
 - `integrated`, `abandoned`, `cancelled`.
 
-## 8. Task Detail Drawer Requirements
+## 7. Task Detail Panel Requirements
 
-Sections:
+Sections (independently loaded and error-isolated):
 1. Overview
-- title, short ID, class, priority, milestone/phase, description.
-
 2. Work Spec
-- objective, constraints, acceptance criteria, interfaces, path hints.
+3. Dependencies (ancestors/dependents)
+4. Artifacts
+5. Integration Attempts
+6. Gate Decisions
 
-3. Dependencies
-- ancestors/dependents with state and depth labels.
+Panel behavior:
+- open from Kanban card or checkpoint item,
+- preserve currently selected task in URL state or in-memory router state,
+- escape-close and focus trap for accessibility.
 
-4. Evidence
-- artifacts (branch, commit, check status, touched files).
-- integration attempts (base/head, result, diagnostics).
-- gate decisions (outcome, actor, reason, evidence refs).
+## 8. Non-Functional Requirements
 
-## 9. Error and Empty-State Behavior
+Performance:
+- support at least 500 tasks with smooth scrolling,
+- enable list/column virtualization at configured threshold,
+- avoid N+1 fetches for drawer sections.
 
-- API errors map to error banners with domain code and retry action.
-- Empty datasets have context-specific copy:
-  - no projects,
-  - no tasks in filtered view,
-  - no artifacts/integration attempts.
-- Drawer sections fail independently; one panel failure must not collapse all panels.
+Accessibility:
+- WCAG AA contrast,
+- keyboard navigation across columns/cards/drawer,
+- accessible labels for state, priority, and card actions.
 
-## 10. Performance Requirements
+Security:
+- read-only UI controls in v1,
+- API key included for secured environments,
+- mask sensitive diagnostics where policy applies.
 
-- Initial board payload should support >= 500 tasks with acceptable interaction latency.
-- Virtualized lists for columns/checkpoint tables once task count crosses threshold (configurable).
-- Minimize N+1 task detail fetches through batched panel queries and caching.
+## 9. Test Strategy
 
-## 11. Accessibility and UX Quality
+Unit:
+- filtering/grouping/state-mapping logic,
+- card and badge rendering states,
+- query key and selector correctness.
 
-- WCAG AA contrast targets for badges/status colors.
-- Keyboard navigation for board cards and drawer controls.
-- Focus trap and escape-close in detail drawer.
-- Screen-reader labels for task cards and state columns.
+Integration/component:
+- projects to workspace routing,
+- Kanban render + filter interactions,
+- detail panel section loading/error isolation,
+- checkpoint navigation into detail panel.
 
-## 12. Test Strategy
+E2E smoke:
+- open projects,
+- open project board,
+- filter tasks,
+- open detail panel,
+- inspect dependencies/evidence,
+- open checkpoints and deep-link to task.
 
-### 12.1 Unit tests
+## 10. P4 Milestone Mapping
 
-- Filter composition logic.
-- Board grouping/state mapping.
-- Drawer section rendering with partial/missing data.
-
-### 12.2 Integration/component tests
-
-- Projects -> workspace navigation.
-- Kanban rendering from task payloads.
-- Drawer fetch orchestration and error isolation.
-
-### 12.3 E2E smoke tests
-
-- Open projects list.
-- Open project board.
-- Apply filters.
-- Open task drawer and inspect dependencies/evidence panels.
-- Open checkpoints tab and navigate to related task.
-
-## 13. Deployment Model
-
-- Separate frontend app (independent deploy artifact).
-- Configured backend API base URL via environment.
-- CORS enabled on backend for frontend origin(s).
-
-## 14. Security Notes (v1)
-
-- UI reads must include project-scoped API key when backend auth is enabled.
-- Do not expose mutation controls in UI v1.
-- Mask sensitive diagnostics fields in display when policy requires.
-
-## 15. Open Technical Questions
-
-1. Should project graph be server-paginated for very large projects?
-2. Should task context endpoint accept both UUID and short ID immediately?
-3. Should checkpoints endpoint include precomputed candidate summaries or only gate task IDs?
+- `P4.M1`: contracts and scaffold readiness.
+- `P4.M2`: feature-complete read experience.
+- `P4.M3`: hardening, acceptance, and rollout safety checks.
