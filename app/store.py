@@ -287,6 +287,17 @@ NORMAL_STATE_TRANSITIONS: dict[TaskState, set[TaskState]] = {
     TaskState.CANCELLED: set(),
 }
 
+TERMINAL_TASK_STATES = {TaskState.INTEGRATED, TaskState.CANCELLED, TaskState.ABANDONED}
+ACTIVE_GATE_STATES = {
+    TaskState.READY,
+    TaskState.RESERVED,
+    TaskState.CLAIMED,
+    TaskState.IN_PROGRESS,
+    TaskState.IMPLEMENTED,
+    TaskState.BLOCKED,
+    TaskState.CONFLICT,
+}
+
 
 class SqlStore:
     def __init__(self) -> None:
@@ -403,54 +414,57 @@ class SqlStore:
             session.flush()
             return _milestone_to_dict(milestone)
 
+    def _create_task_in_session(self, session, payload: dict[str, Any]) -> dict[str, Any]:
+        milestone_id = payload.get("milestone_id")
+        if milestone_id is None:
+            raise ValueError("IDENTIFIER_PARENT_REQUIRED")
+        task_number: int | None = None
+        short_id: str | None = None
+        milestone = session.get(MilestoneModel, milestone_id)
+        if milestone is None or milestone.project_id != payload["project_id"]:
+            raise KeyError("MILESTONE_NOT_FOUND")
+        if milestone.phase_id is None:
+            raise ValueError("IDENTIFIER_PARENT_REQUIRED")
+
+        requested_phase_id = payload.get("phase_id")
+        if requested_phase_id is not None and requested_phase_id != milestone.phase_id:
+            raise ValueError("PHASE_MILESTONE_MISMATCH")
+
+        current_max = session.execute(
+            select(func.max(TaskModel.task_number)).where(
+                TaskModel.project_id == payload["project_id"],
+                TaskModel.milestone_id == milestone_id,
+            )
+        ).scalar_one()
+        task_number = int(current_max or 0) + 1
+        if milestone.short_id:
+            short_id = f"{milestone.short_id}.T{task_number}"
+
+        phase_id = requested_phase_id or milestone.phase_id
+        task = TaskModel(
+            project_id=payload["project_id"],
+            phase_id=phase_id,
+            milestone_id=milestone_id,
+            task_number=task_number,
+            short_id=short_id,
+            title=payload["title"],
+            description=payload.get("description"),
+            state=TaskState.READY,
+            priority=payload.get("priority", 100),
+            work_spec=payload["work_spec"],
+            task_class=TaskClass(payload["task_class"]),
+            capability_tags=payload.get("capability_tags", []),
+            expected_touches=payload.get("expected_touches", []),
+            exclusive_paths=payload.get("exclusive_paths", []),
+            shared_paths=payload.get("shared_paths", []),
+        )
+        session.add(task)
+        session.flush()
+        return _task_to_dict(task)
+
     def create_task(self, payload: dict[str, Any]) -> dict[str, Any]:
         with SessionLocal.begin() as session:
-            milestone_id = payload.get("milestone_id")
-            if milestone_id is None:
-                raise ValueError("IDENTIFIER_PARENT_REQUIRED")
-            task_number: int | None = None
-            short_id: str | None = None
-            milestone = session.get(MilestoneModel, milestone_id)
-            if milestone is None or milestone.project_id != payload["project_id"]:
-                raise KeyError("MILESTONE_NOT_FOUND")
-            if milestone.phase_id is None:
-                raise ValueError("IDENTIFIER_PARENT_REQUIRED")
-
-            requested_phase_id = payload.get("phase_id")
-            if requested_phase_id is not None and requested_phase_id != milestone.phase_id:
-                raise ValueError("PHASE_MILESTONE_MISMATCH")
-
-            current_max = session.execute(
-                select(func.max(TaskModel.task_number)).where(
-                    TaskModel.project_id == payload["project_id"],
-                    TaskModel.milestone_id == milestone_id,
-                )
-            ).scalar_one()
-            task_number = int(current_max or 0) + 1
-            if milestone.short_id:
-                short_id = f"{milestone.short_id}.T{task_number}"
-
-            phase_id = requested_phase_id or milestone.phase_id
-            task = TaskModel(
-                project_id=payload["project_id"],
-                phase_id=phase_id,
-                milestone_id=milestone_id,
-                task_number=task_number,
-                short_id=short_id,
-                title=payload["title"],
-                description=payload.get("description"),
-                state=TaskState.READY,
-                priority=payload.get("priority", 100),
-                work_spec=payload["work_spec"],
-                task_class=TaskClass(payload["task_class"]),
-                capability_tags=payload.get("capability_tags", []),
-                expected_touches=payload.get("expected_touches", []),
-                exclusive_paths=payload.get("exclusive_paths", []),
-                shared_paths=payload.get("shared_paths", []),
-            )
-            session.add(task)
-            session.flush()
-            return _task_to_dict(task)
+            return self._create_task_in_session(session, payload)
 
     def get_task(self, task_id: str) -> dict[str, Any] | None:
         with SessionLocal() as session:
@@ -725,6 +739,189 @@ class SqlStore:
                 query.order_by(GateDecisionModel.created_at.desc(), GateDecisionModel.id.desc())
             ).scalars().all()
             return [_gate_decision_to_dict(row) for row in rows]
+
+    def evaluate_gate_policies(
+        self,
+        *,
+        project_id: str,
+        actor_id: str,
+        policy: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        policy = policy or {}
+        backlog_threshold = int(policy.get("implemented_backlog_threshold", 3))
+        risk_threshold = int(policy.get("risk_threshold", 3))
+        implemented_age_hours = int(policy.get("implemented_age_hours", 24))
+        risk_classes = set(
+            policy.get("risk_task_classes", ["architecture", "db_schema", "security", "cross_cutting"])
+        )
+        if backlog_threshold < 1 or risk_threshold < 1 or implemented_age_hours < 1:
+            raise ValueError("POLICY_CONFIG_INVALID")
+
+        with SessionLocal.begin() as session:
+            milestones = session.execute(
+                select(MilestoneModel).where(MilestoneModel.project_id == project_id)
+            ).scalars().all()
+            milestone_ids = {item.id for item in milestones}
+            if not milestone_ids:
+                return {"created": [], "evaluated": []}
+
+            tasks = session.execute(
+                select(TaskModel).where(
+                    TaskModel.project_id == project_id,
+                    TaskModel.milestone_id.in_(milestone_ids),
+                )
+            ).scalars().all()
+            now = _now()
+            by_milestone: dict[str, list[TaskModel]] = {}
+            for task in tasks:
+                if task.milestone_id is None:
+                    continue
+                by_milestone.setdefault(task.milestone_id, []).append(task)
+
+            existing_gate_keys: set[tuple[str, str]] = set()
+            for task in tasks:
+                if task.task_class not in {TaskClass.REVIEW_GATE, TaskClass.MERGE_GATE}:
+                    continue
+                if task.state not in ACTIVE_GATE_STATES:
+                    continue
+                trigger = (task.work_spec or {}).get("policy_trigger")
+                if not trigger or not task.milestone_id:
+                    continue
+                existing_gate_keys.add((trigger, task.milestone_id))
+
+            created: list[dict[str, Any]] = []
+            evaluated: list[dict[str, Any]] = []
+
+            def _create_policy_gate(
+                *,
+                trigger: str,
+                milestone_id: str,
+                phase_id: str | None,
+                task_class: str,
+                title: str,
+                priority: int,
+                candidate_tasks: list[TaskModel],
+                objective: str,
+            ) -> None:
+                key = (trigger, milestone_id)
+                if key in existing_gate_keys:
+                    return
+                candidate_ids = [task.id for task in sorted(candidate_tasks, key=lambda item: item.created_at)]
+                payload = {
+                    "project_id": project_id,
+                    "phase_id": phase_id,
+                    "milestone_id": milestone_id,
+                    "title": title,
+                    "task_class": task_class,
+                    "priority": priority,
+                    "capability_tags": ["gate", "orchestrator", "policy"],
+                    "work_spec": {
+                        "objective": objective,
+                        "acceptance_criteria": [
+                            "Gate candidates are reviewed and outcome is recorded.",
+                            "Checkpoint closure captures an auditable decision rationale.",
+                        ],
+                        "policy_trigger": trigger,
+                        "policy_scope": {"milestone_id": milestone_id},
+                        "candidate_task_ids": candidate_ids,
+                        "generated_by": actor_id,
+                    },
+                }
+                created_task = self._create_task_in_session(session, payload)
+                existing_gate_keys.add(key)
+                created.append(created_task)
+
+            for milestone in milestones:
+                milestone_tasks = by_milestone.get(milestone.id, [])
+                non_gate_tasks = [
+                    task
+                    for task in milestone_tasks
+                    if task.task_class not in {TaskClass.REVIEW_GATE, TaskClass.MERGE_GATE}
+                ]
+                implemented_tasks = [task for task in non_gate_tasks if task.state == TaskState.IMPLEMENTED]
+                risky_tasks = [
+                    task
+                    for task in non_gate_tasks
+                    if task.task_class.value in risk_classes
+                    and task.state not in TERMINAL_TASK_STATES
+                ]
+                age_breached = [
+                    task
+                    for task in implemented_tasks
+                    if (
+                        now
+                        - (
+                            task.updated_at.replace(tzinfo=timezone.utc)
+                            if task.updated_at.tzinfo is None
+                            else task.updated_at
+                        )
+                    )
+                    >= timedelta(hours=implemented_age_hours)
+                ]
+                milestone_integrated = (
+                    len(non_gate_tasks) > 0 and all(task.state == TaskState.INTEGRATED for task in non_gate_tasks)
+                )
+
+                evaluated.append(
+                    {
+                        "milestone_id": milestone.id,
+                        "milestone_short_id": milestone.short_id,
+                        "milestone_triggered": milestone_integrated,
+                        "implemented_backlog_count": len(implemented_tasks),
+                        "risk_count": len(risky_tasks),
+                        "age_breach_count": len(age_breached),
+                    }
+                )
+
+                if milestone_integrated:
+                    _create_policy_gate(
+                        trigger="milestone_completion",
+                        milestone_id=milestone.id,
+                        phase_id=milestone.phase_id,
+                        task_class=TaskClass.REVIEW_GATE.value,
+                        title=f"[Gate] Milestone Review Checkpoint ({milestone.short_id or milestone.id})",
+                        priority=90,
+                        candidate_tasks=non_gate_tasks,
+                        objective="Review milestone completion and record approval before further progression.",
+                    )
+
+                if len(implemented_tasks) >= backlog_threshold:
+                    _create_policy_gate(
+                        trigger="implemented_backlog",
+                        milestone_id=milestone.id,
+                        phase_id=milestone.phase_id,
+                        task_class=TaskClass.MERGE_GATE.value,
+                        title=f"[Gate] Implemented Backlog Merge Checkpoint ({milestone.short_id or milestone.id})",
+                        priority=95,
+                        candidate_tasks=implemented_tasks,
+                        objective="Resolve implemented backlog by batching review and integration decisions.",
+                    )
+
+                if len(risky_tasks) >= risk_threshold:
+                    _create_policy_gate(
+                        trigger="risk_overlap",
+                        milestone_id=milestone.id,
+                        phase_id=milestone.phase_id,
+                        task_class=TaskClass.REVIEW_GATE.value,
+                        title=f"[Gate] Risk/Overlap Escalation Checkpoint ({milestone.short_id or milestone.id})",
+                        priority=100,
+                        candidate_tasks=risky_tasks,
+                        objective="Review elevated risk/overlap conditions and define mitigation decisions.",
+                    )
+
+                if age_breached:
+                    _create_policy_gate(
+                        trigger="implemented_age_sla",
+                        milestone_id=milestone.id,
+                        phase_id=milestone.phase_id,
+                        task_class=TaskClass.REVIEW_GATE.value,
+                        title=f"[Gate] Implemented Age SLA Checkpoint ({milestone.short_id or milestone.id})",
+                        priority=92,
+                        candidate_tasks=age_breached,
+                        objective="Address implemented tasks breaching age SLA before integration.",
+                    )
+
+            return {"created": created, "evaluated": evaluated}
 
     def get_project_graph(self, project_id: str, include_completed: bool = True) -> dict[str, Any]:
         with SessionLocal() as session:
