@@ -6,6 +6,20 @@
   - `66b79018-c5e0-4880-864e-e2462be613d2`
 - Project name: `tascade`
 
+## Role Scope
+
+This root `AGENTS.md` is the **orchestrator policy** for mainline/project-level coordination.
+
+- Orchestrator scope:
+  - planning and task routing across the project,
+  - policy/governance enforcement,
+  - review collection and `implemented -> integrated` transitions.
+- Subagent scope:
+  - task-local implementation in isolated worktree/session,
+  - status progression up to `implemented`,
+  - artifact publication for orchestrator review.
+- Subagents should follow `./AGENTS.task.md` for task-local SOP.
+
 ## MCP-first Workflow
 
 When working in this repository, prefer the Tascade MCP tools for project coordination:
@@ -61,12 +75,27 @@ Before or at commit time for any claimed task:
    - `in_progress` (if not already)
    - `implemented`
    - `integrated` only after review approval.
-4. For `implemented -> integrated`, provide `reviewed_by`:
+4. Authority split for completion transitions:
+   - Subagent may transition only up to `implemented`.
+   - Only orchestrator/human-review flow may transition to `integrated`.
+5. For `implemented -> integrated`, provide `reviewed_by`:
    - Must be non-empty.
    - Must not equal `actor_id` (no self-review).
-5. Use a clear reason in each transition (for auditability).
-6. Confirm final task state is `integrated` via `get_task(task_id)`.
-7. Only then create/finalize the commit.
+   - Must match an explicitly identified reviewer who approved in-thread.
+6. Capture explicit review evidence for `implemented -> integrated`:
+   - Reviewer approval must be explicit in-thread (for example: `approved`, `lgtm`, `ship it`).
+   - Transition reason must include reviewer identity and approval evidence reference (timestamp/message context).
+   - Do not infer approval from silence, prior collaboration, or user identity assumptions.
+7. If reviewer identity is unknown, ascertain it before transition:
+   - Ask who the reviewer is and wait for explicit answer.
+   - Keep task in `implemented` state until reviewer identity and approval are both explicit.
+8. Agent must proactively assist review when task enters `implemented`:
+   - Send a concise review request reminder to the human reviewer.
+   - Provide a review package: branch, head SHA, base SHA (if any), test command/results, touched files.
+   - Offer to generate a focused diff summary and risk checklist for faster review.
+9. Use a clear reason in each transition (for auditability).
+10. Confirm final task state is `integrated` via `get_task(task_id)`.
+11. Only then create/finalize the commit.
 
 ## Current Structure (Initialized)
 
