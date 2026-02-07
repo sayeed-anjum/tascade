@@ -45,6 +45,21 @@ Include in transition reason or linked artifact record:
 
 This enables orchestrator scanning based on task status without manual deep inspection.
 
+Required handoff template (recommended exact format):
+
+```text
+Task: <short_id> (<uuid>)
+State: implemented
+Branch: <branch>
+Head SHA: <sha>
+Base SHA: <sha-or-none>
+Checks: <command/status>
+Touched Files:
+- <path1>
+- <path2>
+Notes: <optional blockers/risks>
+```
+
 ## Escalation Conditions
 
 Escalate to orchestrator (do not force progress) when:
@@ -53,6 +68,7 @@ Escalate to orchestrator (do not force progress) when:
 - missing dependencies/blockers prevent clean completion,
 - policy or review/gate decisions are needed,
 - task scope appears to require plan changes.
+- any uncertainty exists about review/policy authority boundaries.
 
 ## Review and Integration Boundary
 
