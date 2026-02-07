@@ -150,6 +150,14 @@ REQUIRED_SCHEMA: dict[str, set[str]] = {
         "evidence_refs",
         "created_at",
     },
+    "gate_candidate_link": {
+        "id",
+        "project_id",
+        "gate_task_id",
+        "candidate_task_id",
+        "candidate_order",
+        "created_at",
+    },
 }
 
 

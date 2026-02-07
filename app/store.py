@@ -13,6 +13,7 @@ from app.models import (
     ArtifactModel,
     CheckStatus,
     DependencyEdgeModel,
+    GateCandidateLinkModel,
     EventLogModel,
     GateDecisionModel,
     GateDecisionOutcome,
@@ -460,17 +461,149 @@ class SqlStore:
         )
         session.add(task)
         session.flush()
+        if task.task_class in {TaskClass.REVIEW_GATE, TaskClass.MERGE_GATE}:
+            candidate_ids = (task.work_spec or {}).get("candidate_task_ids") or []
+            self._persist_gate_candidate_links(
+                session,
+                project_id=task.project_id,
+                gate_task_id=task.id,
+                candidate_task_ids=[str(candidate_id) for candidate_id in candidate_ids],
+            )
         return _task_to_dict(task)
 
     def create_task(self, payload: dict[str, Any]) -> dict[str, Any]:
         with SessionLocal.begin() as session:
             return self._create_task_in_session(session, payload)
 
+    def _persist_gate_candidate_links(
+        self,
+        session,
+        *,
+        project_id: str,
+        gate_task_id: str,
+        candidate_task_ids: list[str],
+    ) -> None:
+        seen: set[str] = set()
+        for candidate_order, candidate_task_id in enumerate(candidate_task_ids):
+            if candidate_task_id in seen:
+                continue
+            seen.add(candidate_task_id)
+            session.add(
+                GateCandidateLinkModel(
+                    project_id=project_id,
+                    gate_task_id=gate_task_id,
+                    candidate_task_id=candidate_task_id,
+                    candidate_order=candidate_order,
+                    created_at=_now(),
+                )
+            )
+
+    def _candidate_ids_for_gate_task(self, session, task: TaskModel) -> tuple[list[str], str]:
+        links = session.execute(
+            select(GateCandidateLinkModel).where(
+                GateCandidateLinkModel.project_id == task.project_id,
+                GateCandidateLinkModel.gate_task_id == task.id,
+            )
+        ).scalars().all()
+        if links:
+            ordered = sorted(links, key=lambda link: (link.candidate_order, link.id))
+            return [link.candidate_task_id for link in ordered], "gate_candidate_link"
+
+        candidate_task_ids = (task.work_spec or {}).get("candidate_task_ids") or []
+        return [str(task_id) for task_id in candidate_task_ids], "work_spec"
+
+    def _gate_task_readiness(self, session, task: TaskModel) -> dict[str, Any] | None:
+        if task.task_class not in {TaskClass.REVIEW_GATE, TaskClass.MERGE_GATE}:
+            return None
+
+        candidate_ids, source = self._candidate_ids_for_gate_task(session, task)
+        if not candidate_ids:
+            return {
+                "status": "blocked",
+                "source": source,
+                "total_candidates": 0,
+                "ready_candidates": 0,
+                "blocked_candidate_ids": [],
+                "candidates": [],
+            }
+
+        candidate_rows = session.execute(
+            select(TaskModel).where(
+                TaskModel.project_id == task.project_id,
+                TaskModel.id.in_(candidate_ids),
+            )
+        ).scalars().all()
+        task_by_id = {row.id: row for row in candidate_rows}
+
+        artifact_task_ids = set(
+            session.execute(
+                select(ArtifactModel.task_id).where(
+                    ArtifactModel.project_id == task.project_id,
+                    ArtifactModel.task_id.in_(candidate_ids),
+                )
+            ).scalars().all()
+        )
+        integration_task_ids = set(
+            session.execute(
+                select(IntegrationAttemptModel.task_id).where(
+                    IntegrationAttemptModel.project_id == task.project_id,
+                    IntegrationAttemptModel.task_id.in_(candidate_ids),
+                )
+            ).scalars().all()
+        )
+
+        candidates: list[dict[str, Any]] = []
+        blocked_ids: list[str] = []
+        for candidate_id in candidate_ids:
+            candidate = task_by_id.get(candidate_id)
+            has_artifact = candidate_id in artifact_task_ids
+            has_integration_attempt = candidate_id in integration_task_ids
+            is_ready = (
+                candidate is not None
+                and (
+                    candidate.state == TaskState.INTEGRATED
+                    or (candidate.state == TaskState.IMPLEMENTED and has_artifact)
+                )
+            )
+            if not is_ready:
+                blocked_ids.append(candidate_id)
+            candidates.append(
+                {
+                    "task_id": candidate_id,
+                    "short_id": candidate.short_id if candidate is not None else None,
+                    "state": candidate.state.value if candidate is not None else None,
+                    "has_artifact": has_artifact,
+                    "has_integration_attempt": has_integration_attempt,
+                    "is_ready": is_ready,
+                }
+            )
+
+        ready_candidates = len(candidates) - len(blocked_ids)
+        return {
+            "status": "ready" if not blocked_ids else "blocked",
+            "source": source,
+            "total_candidates": len(candidates),
+            "ready_candidates": ready_candidates,
+            "blocked_candidate_ids": blocked_ids,
+            "candidates": candidates,
+        }
+
+    def _task_to_dict_with_gate_readiness(self, session, task: TaskModel) -> dict[str, Any]:
+        payload = _task_to_dict(task)
+        readiness = self._gate_task_readiness(session, task)
+        if readiness is None:
+            return payload
+
+        work_spec = dict(payload.get("work_spec") or {})
+        work_spec["candidate_readiness"] = readiness
+        payload["work_spec"] = work_spec
+        return payload
+
     def get_task(self, task_id: str) -> dict[str, Any] | None:
         with SessionLocal() as session:
             task = session.get(TaskModel, task_id)
             if task is not None:
-                return _task_to_dict(task)
+                return self._task_to_dict_with_gate_readiness(session, task)
 
             matches = session.execute(
                 select(TaskModel).where(TaskModel.short_id == task_id)
@@ -479,7 +612,7 @@ class SqlStore:
                 return None
             if len(matches) > 1:
                 raise ValueError("TASK_REF_AMBIGUOUS")
-            return _task_to_dict(matches[0])
+            return self._task_to_dict_with_gate_readiness(session, matches[0])
 
     def _children(self, session, project_id: str, from_task_id: str) -> list[str]:
         rows = session.execute(
@@ -564,7 +697,7 @@ class SqlStore:
 
             current = task.state
             if current == target:
-                return _task_to_dict(task)
+                return self._task_to_dict_with_gate_readiness(session, task)
 
             if not force and target not in NORMAL_STATE_TRANSITIONS.get(current, set()):
                 raise ValueError("INVALID_STATE_TRANSITION")
@@ -616,7 +749,7 @@ class SqlStore:
                 caused_by=actor_id,
             )
             session.flush()
-            return _task_to_dict(task)
+            return self._task_to_dict_with_gate_readiness(session, task)
 
     def list_task_events(self, *, project_id: str, task_id: str) -> list[dict[str, Any]]:
         with SessionLocal() as session:
@@ -944,7 +1077,7 @@ class SqlStore:
                 select(DependencyEdgeModel).where(DependencyEdgeModel.project_id == project_id)
             ).scalars().all()
 
-            task_items = [_task_to_dict(task) for task in tasks]
+            task_items = [self._task_to_dict_with_gate_readiness(session, task) for task in tasks]
             if not include_completed:
                 done_states = {TaskState.INTEGRATED.value, TaskState.ABANDONED.value, TaskState.CANCELLED.value}
                 task_items = [task for task in task_items if task["state"] not in done_states]
@@ -1015,7 +1148,7 @@ class SqlStore:
                 return out
 
             return {
-                "task": _task_to_dict(task),
+                "task": self._task_to_dict_with_gate_readiness(session, task),
                 "ancestors": _walk(task_id, parent_map, ancestor_depth),
                 "dependents": _walk(task_id, child_map, dependent_depth),
             }
@@ -1074,7 +1207,7 @@ class SqlStore:
                 ).scalars().all()
                 if not all(self._is_dependency_satisfied(session, edge) for edge in predecessors):
                     continue
-                out.append(_task_to_dict(task))
+                out.append(self._task_to_dict_with_gate_readiness(session, task))
 
             return sorted(out, key=lambda x: (x["priority"], x["created_at"] or ""))
 
@@ -1110,7 +1243,7 @@ class SqlStore:
 
             total = len(tasks)
             page = tasks[offset : offset + limit]
-            return ([_task_to_dict(task) for task in page], total)
+            return ([self._task_to_dict_with_gate_readiness(session, task) for task in page], total)
 
     def create_artifact(self, payload: dict[str, Any]) -> dict[str, Any]:
         with SessionLocal.begin() as session:
@@ -1306,7 +1439,7 @@ class SqlStore:
             session.add(snapshot)
             session.flush()
 
-            return _task_to_dict(task), _lease_to_dict(lease), _snapshot_to_dict(snapshot)
+            return self._task_to_dict_with_gate_readiness(session, task), _lease_to_dict(lease), _snapshot_to_dict(snapshot)
 
     def heartbeat(self, task_id: str, project_id: str, agent_id: str, token: str) -> dict[str, Any]:
         with SessionLocal.begin() as session:

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Integer, JSON, String, Text, Uuid
+from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -394,6 +394,26 @@ class GateDecisionModel(Base):
     actor_id: Mapped[str] = mapped_column(Text, nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     evidence_refs: Mapped[list[str]] = mapped_column(JSON_LIST, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+
+class GateCandidateLinkModel(Base):
+    __tablename__ = "gate_candidate_link"
+    __table_args__ = (
+        UniqueConstraint("gate_task_id", "candidate_task_id", name="uq_gate_candidate_link_pair"),
+    )
+
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    gate_task_id: Mapped[str] = mapped_column(
+        UUID_TEXT, ForeignKey("task.id", ondelete="CASCADE"), nullable=False
+    )
+    candidate_task_id: Mapped[str] = mapped_column(
+        UUID_TEXT, ForeignKey("task.id", ondelete="CASCADE"), nullable=False
+    )
+    candidate_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
 
 

@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from app import mcp_tools
 from app.db import SessionLocal
 from app.mcp_server import MCP_TOOL_NAMES, create_mcp_server
-from app.models import TaskModel
+from app.models import GateCandidateLinkModel, TaskModel
 
 
 def _work_spec(title: str) -> dict:
@@ -572,6 +572,19 @@ def test_mcp_evaluate_gate_policies_triggers_and_suppresses_duplicates():
         "risk_overlap",
         "implemented_age_sla",
     }
+    created_by_trigger = {item["work_spec"]["policy_trigger"]: item for item in first["created"]}
+    risk_gate = created_by_trigger["risk_overlap"]
+
+    with SessionLocal() as session:
+        links = session.query(GateCandidateLinkModel).filter_by(gate_task_id=risk_gate["id"]).all()
+        linked_candidate_ids = [link.candidate_task_id for link in sorted(links, key=lambda item: item.candidate_order)]
+    assert linked_candidate_ids == risk_gate["work_spec"]["candidate_task_ids"]
+
+    risk_gate_before = mcp_tools.get_task(task_id=risk_gate["id"])
+    readiness_before = risk_gate_before["work_spec"]["candidate_readiness"]
+    assert readiness_before["status"] == "blocked"
+    assert readiness_before["ready_candidates"] == 0
+    assert readiness_before["total_candidates"] == 2
 
     second = mcp_tools.evaluate_gate_policies(
         project_id=project["id"],
@@ -584,6 +597,30 @@ def test_mcp_evaluate_gate_policies_triggers_and_suppresses_duplicates():
         },
     )
     assert second["created"] == []
+
+    for task in [risk_task_a, risk_task_b]:
+        mcp_tools.transition_task_state(
+            task_id=task["id"],
+            project_id=project["id"],
+            new_state="implemented",
+            actor_id="dev-1",
+            reason="ready for governance checkpoint",
+        )
+        mcp_tools.create_task_artifact(
+            project_id=project["id"],
+            task_id=task["id"],
+            agent_id="dev-1",
+            branch="codex/risk",
+            commit_sha="abc123",
+            check_status="passed",
+            touched_files=["app/store.py"],
+        )
+
+    risk_gate_after = mcp_tools.get_task(task_id=risk_gate["id"])
+    readiness_after = risk_gate_after["work_spec"]["candidate_readiness"]
+    assert readiness_after["status"] == "ready"
+    assert readiness_after["ready_candidates"] == 2
+    assert readiness_after["total_candidates"] == 2
 
 
 def test_mcp_read_tools_get_project_list_projects_and_get_task():
