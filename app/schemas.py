@@ -277,6 +277,41 @@ class ListGateDecisionsResponse(BaseModel):
     items: list[GateDecision]
 
 
+class GateCheckpointScope(BaseModel):
+    phase_id: str | None = None
+    phase_short_id: str | None = None
+    milestone_id: str | None = None
+    milestone_short_id: str | None = None
+
+
+class GateCheckpointRiskSummary(BaseModel):
+    policy_trigger: str | None = None
+    candidate_total: int = 0
+    candidate_ready: int = 0
+    candidate_blocked: int = 0
+    blocked_candidate_ids: list[str] = Field(default_factory=list)
+
+
+class GateCheckpoint(BaseModel):
+    task_id: str
+    task_short_id: str | None = None
+    title: str
+    gate_type: Literal["review_gate", "merge_gate"]
+    state: str
+    scope: GateCheckpointScope
+    age_hours: float
+    risk_summary: GateCheckpointRiskSummary
+    created_at: str
+    updated_at: str
+
+
+class ListGateCheckpointsResponse(BaseModel):
+    items: list[GateCheckpoint]
+    total: int
+    limit: int
+    offset: int
+
+
 class ClaimTaskRequest(BaseModel):
     project_id: str
     agent_id: str

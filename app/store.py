@@ -873,6 +873,89 @@ class SqlStore:
             ).scalars().all()
             return [_gate_decision_to_dict(row) for row in rows]
 
+    def list_gate_checkpoints(
+        self,
+        *,
+        project_id: str,
+        gate_type: str | None = None,
+        phase_id: str | None = None,
+        milestone_id: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        with SessionLocal() as session:
+            query = select(TaskModel).where(
+                TaskModel.project_id == project_id,
+                TaskModel.task_class.in_([TaskClass.REVIEW_GATE, TaskClass.MERGE_GATE]),
+                TaskModel.state.in_(list(ACTIVE_GATE_STATES)),
+            )
+
+            if gate_type is not None:
+                query = query.where(TaskModel.task_class == TaskClass(gate_type))
+            if phase_id is not None:
+                query = query.where(TaskModel.phase_id == phase_id)
+            if milestone_id is not None:
+                query = query.where(TaskModel.milestone_id == milestone_id)
+
+            rows = session.execute(
+                query.order_by(TaskModel.priority.asc(), TaskModel.created_at.asc(), TaskModel.id.asc())
+            ).scalars().all()
+
+            total = len(rows)
+            page = rows[offset : offset + limit]
+
+            phase_ids = {task.phase_id for task in page if task.phase_id}
+            milestone_ids = {task.milestone_id for task in page if task.milestone_id}
+
+            phase_by_id = {
+                phase.id: phase
+                for phase in session.execute(
+                    select(PhaseModel).where(PhaseModel.id.in_(phase_ids))
+                ).scalars().all()
+            }
+            milestone_by_id = {
+                milestone.id: milestone
+                for milestone in session.execute(
+                    select(MilestoneModel).where(MilestoneModel.id.in_(milestone_ids))
+                ).scalars().all()
+            }
+
+            now = _now()
+            items: list[dict[str, Any]] = []
+            for task in page:
+                readiness = self._gate_task_readiness(session, task) or {}
+                phase = phase_by_id.get(task.phase_id) if task.phase_id else None
+                milestone = milestone_by_id.get(task.milestone_id) if task.milestone_id else None
+                created_at = task.created_at.replace(tzinfo=timezone.utc) if task.created_at.tzinfo is None else task.created_at
+                age_hours = max((now - created_at).total_seconds() / 3600, 0.0)
+                items.append(
+                    {
+                        "task_id": task.id,
+                        "task_short_id": task.short_id,
+                        "title": task.title,
+                        "gate_type": task.task_class.value,
+                        "state": task.state.value,
+                        "scope": {
+                            "phase_id": task.phase_id,
+                            "phase_short_id": phase.short_id if phase is not None else None,
+                            "milestone_id": task.milestone_id,
+                            "milestone_short_id": milestone.short_id if milestone is not None else None,
+                        },
+                        "age_hours": round(age_hours, 3),
+                        "risk_summary": {
+                            "policy_trigger": (task.work_spec or {}).get("policy_trigger"),
+                            "candidate_total": int(readiness.get("total_candidates", 0) or 0),
+                            "candidate_ready": int(readiness.get("ready_candidates", 0) or 0),
+                            "candidate_blocked": len(readiness.get("blocked_candidate_ids", []) or []),
+                            "blocked_candidate_ids": readiness.get("blocked_candidate_ids", []) or [],
+                        },
+                        "created_at": _iso(task.created_at),
+                        "updated_at": _iso(task.updated_at),
+                    }
+                )
+
+            return items, total
+
     def evaluate_gate_policies(
         self,
         *,

@@ -19,6 +19,7 @@ from app.schemas import (
     DependencyEdge,
     ErrorResponse,
     GetReadyTasksResponse,
+    ListGateCheckpointsResponse,
     HeartbeatRequest,
     HeartbeatResponse,
     GateDecision,
@@ -129,6 +130,40 @@ def list_gate_decisions(
         )
     items = STORE.list_gate_decisions(project_id=project_id, task_id=task_id, phase_id=phase_id)
     return ListGateDecisionsResponse(items=[GateDecision(**item) for item in items])
+
+
+@app.get("/v1/gates/checkpoints", response_model=ListGateCheckpointsResponse)
+def list_gate_checkpoints(
+    project_id: str,
+    gate_type: str | None = None,
+    phase_id: str | None = None,
+    milestone_id: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> ListGateCheckpointsResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    if gate_type is not None and gate_type not in {"review_gate", "merge_gate"}:
+        raise HTTPException(
+            status_code=409,
+            detail=ErrorResponse(
+                error={"code": "INVALID_GATE_TYPE", "message": "Unknown gate type filter", "retryable": False}
+            ).model_dump(),
+        )
+    items, total = STORE.list_gate_checkpoints(
+        project_id=project_id,
+        gate_type=gate_type,
+        phase_id=phase_id,
+        milestone_id=milestone_id,
+        limit=limit,
+        offset=offset,
+    )
+    return ListGateCheckpointsResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 @app.post("/v1/tasks", response_model=Task, status_code=status.HTTP_201_CREATED)
