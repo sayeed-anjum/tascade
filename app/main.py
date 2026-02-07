@@ -28,6 +28,7 @@ from app.schemas import (
     ListArtifactsResponse,
     ListGateDecisionsResponse,
     ListIntegrationAttemptsResponse,
+    ListProjectsResponse,
     ListTasksResponse,
     PlanChangeset,
     PlanVersion,
@@ -61,6 +62,25 @@ def health() -> dict[str, str]:
 @app.post("/v1/projects", response_model=Project, status_code=status.HTTP_201_CREATED)
 def create_project(payload: CreateProjectRequest) -> Project:
     project = STORE.create_project(payload.name)
+    return Project(**project)
+
+
+@app.get("/v1/projects", response_model=ListProjectsResponse)
+def list_projects() -> ListProjectsResponse:
+    items = STORE.list_projects()
+    return ListProjectsResponse(items=[Project(**item) for item in items])
+
+
+@app.get("/v1/projects/{project_id}", response_model=Project)
+def get_project(project_id: str) -> Project:
+    project = STORE.get_project(project_id)
+    if project is None:
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
     return Project(**project)
 
 

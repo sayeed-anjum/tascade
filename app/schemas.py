@@ -28,6 +28,10 @@ class Project(BaseModel):
     updated_at: str
 
 
+class ListProjectsResponse(BaseModel):
+    items: list[Project]
+
+
 class WorkSpec(BaseModel):
     objective: str
     constraints: list[str] = Field(default_factory=list)
