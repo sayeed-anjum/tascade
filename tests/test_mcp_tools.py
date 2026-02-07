@@ -1,7 +1,10 @@
 import json
+from datetime import datetime, timedelta, timezone
 
 from app import mcp_tools
+from app.db import SessionLocal
 from app.mcp_server import MCP_TOOL_NAMES, create_mcp_server
+from app.models import TaskModel
 
 
 def _work_spec(title: str) -> dict:
@@ -407,6 +410,182 @@ def test_mcp_gate_decision_write_read_and_gate_enforcement():
     assert integrated["task"]["state"] == "integrated"
 
 
+def test_mcp_evaluate_gate_policies_triggers_and_suppresses_duplicates():
+    project = mcp_tools.create_project(name="mcp-policy-gates-proj")
+    phase = mcp_tools.create_phase(project_id=project["id"], name="Phase Policy", sequence=0)
+    milestone_backlog = mcp_tools.create_milestone(
+        project_id=project["id"],
+        name="Milestone Backlog",
+        sequence=0,
+        phase_id=phase["id"],
+    )
+    milestone_risk = mcp_tools.create_milestone(
+        project_id=project["id"],
+        name="Milestone Risk",
+        sequence=1,
+        phase_id=phase["id"],
+    )
+    milestone_age = mcp_tools.create_milestone(
+        project_id=project["id"],
+        name="Milestone Age",
+        sequence=2,
+        phase_id=phase["id"],
+    )
+    milestone_complete = mcp_tools.create_milestone(
+        project_id=project["id"],
+        name="Milestone Complete",
+        sequence=3,
+        phase_id=phase["id"],
+    )
+
+    backlog_task_a = mcp_tools.create_task(
+        project_id=project["id"],
+        title="Backlog A",
+        task_class="backend",
+        work_spec=_work_spec("Backlog A"),
+        phase_id=phase["id"],
+        milestone_id=milestone_backlog["id"],
+    )
+    backlog_task_b = mcp_tools.create_task(
+        project_id=project["id"],
+        title="Backlog B",
+        task_class="backend",
+        work_spec=_work_spec("Backlog B"),
+        phase_id=phase["id"],
+        milestone_id=milestone_backlog["id"],
+    )
+    for task in [backlog_task_a, backlog_task_b]:
+        mcp_tools.transition_task_state(
+            task_id=task["id"],
+            project_id=project["id"],
+            new_state="in_progress",
+            actor_id="dev-1",
+            reason="start",
+        )
+        mcp_tools.transition_task_state(
+            task_id=task["id"],
+            project_id=project["id"],
+            new_state="implemented",
+            actor_id="dev-1",
+            reason="ready for merge",
+        )
+
+    risk_task_a = mcp_tools.create_task(
+        project_id=project["id"],
+        title="Risk A",
+        task_class="security",
+        work_spec=_work_spec("Risk A"),
+        phase_id=phase["id"],
+        milestone_id=milestone_risk["id"],
+    )
+    risk_task_b = mcp_tools.create_task(
+        project_id=project["id"],
+        title="Risk B",
+        task_class="architecture",
+        work_spec=_work_spec("Risk B"),
+        phase_id=phase["id"],
+        milestone_id=milestone_risk["id"],
+    )
+    for task in [risk_task_a, risk_task_b]:
+        mcp_tools.transition_task_state(
+            task_id=task["id"],
+            project_id=project["id"],
+            new_state="in_progress",
+            actor_id="dev-1",
+            reason="active risky implementation",
+        )
+
+    age_task = mcp_tools.create_task(
+        project_id=project["id"],
+        title="Age A",
+        task_class="backend",
+        work_spec=_work_spec("Age A"),
+        phase_id=phase["id"],
+        milestone_id=milestone_age["id"],
+    )
+    mcp_tools.transition_task_state(
+        task_id=age_task["id"],
+        project_id=project["id"],
+        new_state="in_progress",
+        actor_id="dev-1",
+        reason="start",
+    )
+    mcp_tools.transition_task_state(
+        task_id=age_task["id"],
+        project_id=project["id"],
+        new_state="implemented",
+        actor_id="dev-1",
+        reason="aged implemented item",
+    )
+    with SessionLocal.begin() as session:
+        model = session.get(TaskModel, age_task["id"])
+        assert model is not None
+        model.updated_at = datetime.now(timezone.utc) - timedelta(hours=2)
+
+    complete_task = mcp_tools.create_task(
+        project_id=project["id"],
+        title="Complete A",
+        task_class="backend",
+        work_spec=_work_spec("Complete A"),
+        phase_id=phase["id"],
+        milestone_id=milestone_complete["id"],
+    )
+    mcp_tools.transition_task_state(
+        task_id=complete_task["id"],
+        project_id=project["id"],
+        new_state="in_progress",
+        actor_id="dev-1",
+        reason="start",
+    )
+    mcp_tools.transition_task_state(
+        task_id=complete_task["id"],
+        project_id=project["id"],
+        new_state="implemented",
+        actor_id="dev-1",
+        reason="complete",
+    )
+    mcp_tools.transition_task_state(
+        task_id=complete_task["id"],
+        project_id=project["id"],
+        new_state="integrated",
+        actor_id="dev-1",
+        reviewed_by="reviewer-1",
+        review_evidence_refs=["review://thread/policy-1"],
+        reason="approved merge",
+    )
+
+    first = mcp_tools.evaluate_gate_policies(
+        project_id=project["id"],
+        actor_id="policy-engine",
+        policy={
+            "implemented_backlog_threshold": 2,
+            "risk_threshold": 2,
+            "implemented_age_hours": 1,
+            "risk_task_classes": ["architecture", "security"],
+        },
+    )
+    assert len(first["created"]) == 4
+    created_triggers = {item["work_spec"]["policy_trigger"] for item in first["created"]}
+    assert created_triggers == {
+        "milestone_completion",
+        "implemented_backlog",
+        "risk_overlap",
+        "implemented_age_sla",
+    }
+
+    second = mcp_tools.evaluate_gate_policies(
+        project_id=project["id"],
+        actor_id="policy-engine",
+        policy={
+            "implemented_backlog_threshold": 2,
+            "risk_threshold": 2,
+            "implemented_age_hours": 1,
+            "risk_task_classes": ["architecture", "security"],
+        },
+    )
+    assert second["created"] == []
+
+
 def test_mcp_read_tools_get_project_list_projects_and_get_task():
     created_a = mcp_tools.create_project(name="read-proj-a")
     created_b = mcp_tools.create_project(name="read-proj-b")
@@ -487,6 +666,7 @@ def test_mcp_tool_contract_contains_setup_and_execution_tools():
         "create_gate_rule",
         "create_gate_decision",
         "list_gate_decisions",
+        "evaluate_gate_policies",
         "list_ready_tasks",
         "claim_task",
         "heartbeat_task",
