@@ -6,6 +6,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import KanbanBoard from "@/components/organisms/KanbanBoard";
 
 // ---------------------------------------------------------------------------
 // WorkspacePage -- tabbed workspace for Tasks and Checkpoints.
@@ -38,10 +39,11 @@ export default function WorkspacePage() {
 
         <TabsContent value="tasks">
           <div className="mt-4">
-            <h2 className="text-xl font-semibold">Tasks</h2>
-            <p className="text-muted-foreground mt-1">
-              Task list will be rendered here.
-            </p>
+            {projectId ? (
+              <KanbanBoard projectId={projectId} />
+            ) : (
+              <p className="text-muted-foreground">No project selected.</p>
+            )}
           </div>
         </TabsContent>
 

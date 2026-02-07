@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { STATE_COLORS } from "@/lib/constants";
+import { stateColorClass } from "@/lib/state-colors";
 
 // ---------------------------------------------------------------------------
 // Health indicator colour based on the ratio of blocked tasks.
@@ -34,28 +34,6 @@ function computeHealth(taskCounts: Record<string, number>): HealthLevel {
   if (ratio >= 0.3) return "red";
   if (ratio >= 0.1) return "amber";
   return "green";
-}
-
-// ---------------------------------------------------------------------------
-// Tailwind colour classes keyed by STATE_COLORS values.
-// ---------------------------------------------------------------------------
-
-const COLOR_BG_CLASSES: Record<string, string> = {
-  blue: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  amber: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-  purple:
-    "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-  teal: "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200",
-  green: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  red: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-};
-
-const FALLBACK_COLOR =
-  "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
-
-function stateColorClass(state: string): string {
-  const color = (STATE_COLORS as Record<string, string>)[state];
-  return COLOR_BG_CLASSES[color] ?? FALLBACK_COLOR;
 }
 
 // ---------------------------------------------------------------------------
