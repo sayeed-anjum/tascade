@@ -13,6 +13,8 @@ This file defines task-local rules for subagents operating in isolated worktrees
 Before starting implementation:
 
 1. Confirm assigned task ID and project ID.
+   - Prefer short ID for discussion (for example `P3.M1.T7`).
+   - Keep UUID available for MCP/API commands that require it.
 2. Confirm expected acceptance criteria from task `work_spec`.
 3. Confirm touched-path expectations/exclusions if provided.
 

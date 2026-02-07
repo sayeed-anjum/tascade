@@ -41,6 +41,18 @@ When working in this repository, prefer the Tascade MCP tools for project coordi
    - `create_plan_changeset(...)`
    - `apply_plan_changeset(changeset_id, allow_rebase=false)`
 
+## Task Reference Convention
+
+Use task `short_id` as the primary human-facing identifier in chat, reviews, and status updates.
+
+- Preferred:
+  - `P3.M1.T6` (primary)
+  - first mention may include UUID for traceability: `P3.M1.T6 (58d380b4-543f-4916-bfa2-2cfcefc4435b)`
+- UUID usage:
+  - required for MCP/API operations that need UUID input,
+  - optional in human discussion after first mention.
+- Avoid UUID-only references in routine discussion unless short ID is unavailable.
+
 ## Work Traceability Rule (Required)
 
 Any substantial work in this repository must have a corresponding Tascade task before implementation begins.
