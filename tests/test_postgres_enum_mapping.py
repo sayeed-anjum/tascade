@@ -43,6 +43,7 @@ def test_model_enums_use_lowercase_value_variants():
         "released",
         "consumed",
     ]
+    assert TaskReservationModel.__table__.c.mode.type.enums == ["hard"]
     assert PlanChangeSetModel.__table__.c.status.type.enums == [
         "draft",
         "validated",

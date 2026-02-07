@@ -21,6 +21,7 @@ from app.models import (
     PlanVersionModel,
     ProjectModel,
     ProjectStatus,
+    ReservationMode,
     ReservationStatus,
     TaskClass,
     TaskExecutionSnapshotModel,
@@ -130,14 +131,13 @@ def _lease_to_dict(model: LeaseModel) -> dict[str, Any]:
         "released_at": _iso(model.released_at),
     }
 
-
 def _reservation_to_dict(model: TaskReservationModel) -> dict[str, Any]:
     return {
         "id": model.id,
         "project_id": model.project_id,
         "task_id": model.task_id,
         "assignee_agent_id": model.assignee_agent_id,
-        "mode": model.mode,
+        "mode": model.mode.value,
         "status": model.status.value,
         "ttl_seconds": model.ttl_seconds,
         "created_by": model.created_by,
@@ -708,7 +708,7 @@ class SqlStore:
                 project_id=project_id,
                 task_id=task_id,
                 assignee_agent_id=assignee_agent_id,
-                mode="hard",
+                mode=ReservationMode.HARD,
                 status=ReservationStatus.ACTIVE,
                 ttl_seconds=ttl_seconds,
                 created_by=created_by,

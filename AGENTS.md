@@ -56,3 +56,14 @@ Before or at commit time for any claimed task:
 
 - Historical tasks are currently represented as normal tasks with `[Historical]` title prefix.
 - Historical completion backfill should use `transition_task_state(..., new_state="integrated", force=true)`.
+
+## Protocol Discipline (Required)
+
+When an operation fails in normal workflow (MCP/API/DB):
+
+1. Diagnose and fix the root cause in schema/code/config first.
+2. Verify the fix with tests and/or direct reproducible validation.
+3. Only after the fix is validated, continue with task execution.
+4. Do not use data-level or manual workarounds to bypass unresolved defects.
+
+If temporary fallback is unavoidable due external process staleness (for example, MCP server not yet reloaded), record the reason explicitly and schedule immediate remediation (restart/reload) before further feature work.

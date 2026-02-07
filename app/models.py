@@ -73,6 +73,10 @@ class ReservationStatus(str, Enum):
     CONSUMED = "consumed"
 
 
+class ReservationMode(str, Enum):
+    HARD = "hard"
+
+
 class PlanChangeSetStatus(str, Enum):
     DRAFT = "draft"
     VALIDATED = "validated"
@@ -212,7 +216,9 @@ class TaskReservationModel(Base):
         UUID_TEXT, ForeignKey("task.id", ondelete="CASCADE"), nullable=False
     )
     assignee_agent_id: Mapped[str] = mapped_column(Text, nullable=False)
-    mode: Mapped[str] = mapped_column(Text, nullable=False, default="hard")
+    mode: Mapped[ReservationMode] = mapped_column(
+        SAEnum(ReservationMode, values_callable=_enum_values), nullable=False, default=ReservationMode.HARD
+    )
     status: Mapped[ReservationStatus] = mapped_column(
         SAEnum(ReservationStatus, values_callable=_enum_values), nullable=False, default=ReservationStatus.ACTIVE
     )
