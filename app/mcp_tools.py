@@ -72,6 +72,17 @@ def list_gate_decisions(
     return {"items": STORE.list_gate_decisions(project_id=project_id, task_id=task_id, phase_id=phase_id)}
 
 
+def evaluate_gate_policies(
+    *,
+    project_id: str,
+    actor_id: str,
+    policy: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not STORE.project_exists(project_id):
+        raise KeyError("PROJECT_NOT_FOUND")
+    return STORE.evaluate_gate_policies(project_id=project_id, actor_id=actor_id, policy=policy or {})
+
+
 def get_project(project_id: str) -> dict[str, Any]:
     project = STORE.get_project(project_id)
     if project is None:

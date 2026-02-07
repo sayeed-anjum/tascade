@@ -15,6 +15,7 @@ MCP_TOOL_NAMES = [
     "create_gate_rule",
     "create_gate_decision",
     "list_gate_decisions",
+    "evaluate_gate_policies",
     "get_project",
     "list_projects",
     "create_phase",
@@ -70,6 +71,7 @@ _DOMAIN_ERRORS: dict[str, tuple[str, bool]] = {
     "GATE_SCOPE_REQUIRED": ("Gate decision requires task_id or phase_id", False),
     "INVALID_GATE_OUTCOME": ("Gate decision outcome is invalid", False),
     "GATE_DECISION_REQUIRED": ("Gate decision is required before integration", False),
+    "POLICY_CONFIG_INVALID": ("Gate policy configuration is invalid", False),
 }
 
 
@@ -124,6 +126,7 @@ def create_mcp_server():
     server.tool(name="create_gate_rule")(_wrap_tool(mcp_tools.create_gate_rule))
     server.tool(name="create_gate_decision")(_wrap_tool(mcp_tools.create_gate_decision))
     server.tool(name="list_gate_decisions")(_wrap_tool(mcp_tools.list_gate_decisions))
+    server.tool(name="evaluate_gate_policies")(_wrap_tool(mcp_tools.evaluate_gate_policies))
     server.tool(name="get_project")(_wrap_tool(mcp_tools.get_project))
     server.tool(name="list_projects")(_wrap_tool(mcp_tools.list_projects))
     server.tool(name="create_phase")(_wrap_tool(mcp_tools.create_phase))
