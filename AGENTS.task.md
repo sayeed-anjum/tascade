@@ -8,6 +8,7 @@ This file defines task-local rules for subagents operating in isolated worktrees
 - Focus on implementation, tests, and task artifacts.
 - Do not make project-wide governance decisions.
 - If working as a lane under an umbrella task, keep the child task reference visible in handoff notes.
+- Use a dedicated worktree/branch for each tracked short-ID task.
 
 ## Required Input Context
 
@@ -33,13 +34,23 @@ Subagent must not transition to `integrated`.
 1. Implement only task-scoped changes.
 2. Run relevant verification (tests/lint/build) for touched behavior.
 3. If verification fails, fix root cause before status advancement.
+4. Commit task-scoped changes before moving task state to `implemented`.
+
+## Task Isolation and Commit Rule (Required)
+
+For any assigned task with a Tascade `short_id`:
+
+1. Keep all durable code/docs changes for that task in its dedicated worktree/branch.
+2. Do not combine changes for multiple tracked short-ID tasks in one uncommitted working tree.
+3. Before `in_progress -> implemented`, ensure at least one commit exists for the task lane.
+4. Artifact package must reference the actual committed branch head SHA for that task.
 
 ## Artifact Package (Required before `implemented`)
 
 Include in transition reason or linked artifact record:
 
 - branch name
-- head commit SHA
+- head commit SHA (must be committed and task-lane specific)
 - base SHA (if available)
 - check/CI reference and status (or local command evidence)
 - touched files list

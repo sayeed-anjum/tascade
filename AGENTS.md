@@ -73,6 +73,21 @@ Any substantial work in this repository must have a corresponding Tascade task b
   - local exploratory debugging with no durable code changes.
 - If emergency work starts before task creation (for example incident mitigation), create and link the task immediately after stabilization in the same session, and record reason in transition notes.
 
+## Provenance Integrity Rule (Required)
+
+For any task with a Tascade `short_id`, provenance must be isolated and commit-backed.
+
+1. One tracked task per worktree/branch.
+2. Do not mix multiple short-ID tasks in the same uncommitted working tree.
+3. Before transitioning a tracked task to `implemented`, create at least one commit containing that task's scoped changes.
+4. The `implemented` artifact package must reference the real commit SHA from that task's branch head (not a placeholder/uncommitted SHA).
+5. If work was accidentally mixed across tasks in one worktree, split the changes into task-specific branches/commits first, then update task states.
+
+Allowed exceptions:
+
+- tiny helper sub-steps with no Tascade task/short_id,
+- typo-only or formatting-only doc edits that do not represent a tracked implementation lane.
+
 ### Umbrella + Child Pattern (Recommended for multi-lane work)
 
 When work is split into 2+ independent lanes/worktrees, use:
@@ -97,36 +112,36 @@ Close-out model:
 Before or at commit time for any claimed task:
 
 1. Verify implementation/tests are complete for the scoped task.
-2. Publish task artifacts before `implemented` transition (required for new work):
+2. Commit task-scoped changes on the task branch/worktree before `implemented` transition.
+3. Publish task artifacts before `implemented` transition (required for new work):
    - branch name
-   - head commit SHA (and base SHA if available)
+   - head commit SHA from committed task branch head (and base SHA if available)
    - check/CI reference and status
    - touched files list
-3. Transition task state through completion path:
+4. Transition task state through completion path:
    - `in_progress` (if not already)
    - `implemented`
    - `integrated` only after review approval.
-4. Authority split for completion transitions:
+5. Authority split for completion transitions:
    - Subagent may transition only up to `implemented`.
    - Only orchestrator/human-review flow may transition to `integrated`.
-5. For `implemented -> integrated`, provide `reviewed_by`:
+6. For `implemented -> integrated`, provide `reviewed_by`:
    - Must be non-empty.
    - Must not equal `actor_id` (no self-review).
    - Must match an explicitly identified reviewer who approved in-thread.
-6. Capture explicit review evidence for `implemented -> integrated`:
+7. Capture explicit review evidence for `implemented -> integrated`:
    - Reviewer approval must be explicit in-thread (for example: `approved`, `lgtm`, `ship it`).
    - Transition reason must include reviewer identity and approval evidence reference (timestamp/message context).
    - Do not infer approval from silence, prior collaboration, or user identity assumptions.
-7. If reviewer identity is unknown, ascertain it before transition:
+8. If reviewer identity is unknown, ascertain it before transition:
    - Ask who the reviewer is and wait for explicit answer.
    - Keep task in `implemented` state until reviewer identity and approval are both explicit.
-8. Agent must proactively assist review when task enters `implemented`:
+9. Agent must proactively assist review when task enters `implemented`:
    - Send a concise review request reminder to the human reviewer.
    - Provide a review package: branch, head SHA, base SHA (if any), test command/results, touched files.
    - Offer to generate a focused diff summary and risk checklist for faster review.
-9. Use a clear reason in each transition (for auditability).
-10. Confirm final task state is `integrated` via `get_task(task_id)`.
-11. Only then create/finalize the commit.
+10. Use a clear reason in each transition (for auditability).
+11. Confirm final task state is `integrated` via `get_task(task_id)`.
 
 ## Current Structure (Initialized)
 
