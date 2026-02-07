@@ -5,7 +5,7 @@ from enum import Enum
 from uuid import uuid4
 
 from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Integer, JSON, String, Text, Uuid
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -105,6 +105,7 @@ class GateDecisionOutcome(str, Enum):
 
 UUID_TEXT = Uuid(as_uuid=False)
 TEXT_LIST = JSON().with_variant(ARRAY(Text), "postgresql")
+JSON_LIST = JSON().with_variant(JSONB, "postgresql")
 
 
 def _enum_values(enum_cls):
@@ -326,7 +327,7 @@ class ArtifactModel(Base):
     check_status: Mapped[CheckStatus] = mapped_column(
         SAEnum(CheckStatus, values_callable=_enum_values), nullable=False, default=CheckStatus.PENDING
     )
-    touched_files: Mapped[list[str]] = mapped_column(TEXT_LIST, nullable=False, default=list)
+    touched_files: Mapped[list[str]] = mapped_column(JSON_LIST, nullable=False, default=list)
     artifact_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     short_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
@@ -392,7 +393,7 @@ class GateDecisionModel(Base):
     )
     actor_id: Mapped[str] = mapped_column(Text, nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
-    evidence_refs: Mapped[list[str]] = mapped_column(TEXT_LIST, nullable=False, default=list)
+    evidence_refs: Mapped[list[str]] = mapped_column(JSON_LIST, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
 
 
