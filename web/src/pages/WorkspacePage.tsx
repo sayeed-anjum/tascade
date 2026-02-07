@@ -1,5 +1,7 @@
+import { useCallback } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
+import TaskDetailPanel from "@/components/organisms/TaskDetailPanel";
 import {
   Tabs,
   TabsContent,
@@ -11,6 +13,7 @@ import KanbanBoard from "@/components/organisms/KanbanBoard";
 // ---------------------------------------------------------------------------
 // WorkspacePage -- tabbed workspace for Tasks and Checkpoints.
 // Derives the active tab from the current URL path segment.
+// When a :taskId param is present, renders the TaskDetailPanel drawer.
 // ---------------------------------------------------------------------------
 
 function activeTab(pathname: string): string {
@@ -19,7 +22,10 @@ function activeTab(pathname: string): string {
 }
 
 export default function WorkspacePage() {
-  const { projectId } = useParams<{ projectId: string }>();
+  const { projectId, taskId } = useParams<{
+    projectId: string;
+    taskId: string;
+  }>();
   const location = useLocation();
   const navigate = useNavigate();
   const tab = activeTab(location.pathname);
@@ -28,6 +34,13 @@ export default function WorkspacePage() {
     if (!projectId) return;
     navigate(`/projects/${projectId}/${value}`);
   }
+
+  const handleDrawerClose = useCallback(() => {
+    if (!projectId) return;
+    navigate(`/projects/${projectId}/tasks`);
+  }, [projectId, navigate]);
+
+  const drawerOpen = !!taskId;
 
   return (
     <div className="p-6">
@@ -56,6 +69,15 @@ export default function WorkspacePage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {projectId && (
+        <TaskDetailPanel
+          taskId={taskId ?? null}
+          projectId={projectId}
+          open={drawerOpen}
+          onClose={handleDrawerClose}
+        />
+      )}
     </div>
   );
 }
