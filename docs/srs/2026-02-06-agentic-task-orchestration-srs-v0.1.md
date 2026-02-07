@@ -4,6 +4,33 @@ System: Agentic Task Orchestration (Tascade)
 Date: 2026-02-06
 Status: Draft
 
+## 0. Implementation Status Addendum (2026-02-07)
+
+This SRS remains the technical baseline. The following addendum syncs current implementation status.
+
+Snapshot for project `66b79018-c5e0-4880-864e-e2462be613d2`:
+- Total tasks: `46`
+- `integrated`: `39`
+- `ready`: `6`
+- `claimed`: `1`
+- `implemented`: `0`
+
+Verified implementation coverage highlights:
+- Gate decision APIs (`POST /v1/gate-decisions`, `GET /v1/gate-decisions`) and policy-generated gate task pipeline are integrated.
+- Artifact and integration attempt lifecycle APIs are integrated:
+  - `POST/GET /v1/tasks/{task_id}/artifacts`
+  - `POST/GET /v1/tasks/{task_id}/integration-attempts`
+  - `POST /v1/integration-attempts/{attempt_id}/result`
+- Task listing, readiness, transitions, and planning primitives are integrated.
+- Current automated verification baseline: `57 passed` (`pytest -q`).
+
+Remaining SRS-aligned work (active `P3.M3` scope):
+- `GET /v1/gates/checkpoints` read model endpoint.
+- Human checkpoint lane in web monitoring UI.
+- Project-scoped API key auth and role-scope enforcement.
+- Gate/integration observability dashboards and metrics completion.
+- MCP `list_ready_tasks` capability-input contract hardening for payload compatibility.
+
 ## 1. Introduction
 
 ### 1.1 Purpose
