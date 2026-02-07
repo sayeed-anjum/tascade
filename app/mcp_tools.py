@@ -5,6 +5,26 @@ from typing import Any
 from app.store import STORE
 
 
+def _normalize_capabilities(capabilities: list[str] | str | None) -> set[str]:
+    if capabilities is None:
+        return set()
+
+    if isinstance(capabilities, str):
+        return {item.strip() for item in capabilities.split(",") if item.strip()}
+
+    if not isinstance(capabilities, list):
+        raise ValueError("INVALID_CAPABILITIES")
+
+    normalized: set[str] = set()
+    for item in capabilities:
+        if not isinstance(item, str):
+            raise ValueError("INVALID_CAPABILITIES")
+        cleaned = item.strip()
+        if cleaned:
+            normalized.add(cleaned)
+    return normalized
+
+
 def create_project(name: str) -> dict[str, Any]:
     return STORE.create_project(name=name)
 
@@ -214,11 +234,19 @@ def list_ready_tasks(
     *,
     project_id: str,
     agent_id: str,
-    capabilities: list[str] | None = None,
+    capabilities: list[str] | str | None = None,
 ) -> dict[str, Any]:
+    """
+    Returns ready tasks for an agent.
+
+    `capabilities` accepts:
+    - list[str]: ["backend", "mcp"]
+    - comma-delimited string: "backend,mcp"
+    - single string: "backend"
+    """
     if not STORE.project_exists(project_id):
         raise KeyError("PROJECT_NOT_FOUND")
-    items = STORE.get_ready_tasks(project_id, agent_id, set(capabilities or []))
+    items = STORE.get_ready_tasks(project_id, agent_id, _normalize_capabilities(capabilities))
     return {"items": items}
 
 

@@ -95,6 +95,67 @@ def test_mcp_setup_and_execution_flow():
     assert heartbeat["stale"] is False
 
 
+def test_mcp_list_ready_tasks_normalizes_string_capabilities_and_validates_shape():
+    project = mcp_tools.create_project(name="mcp-ready-capabilities-proj")
+    project_id = project["id"]
+    phase, milestone = _create_hierarchy(project_id, "ReadyCaps")
+
+    backend_task = mcp_tools.create_task(
+        project_id=project_id,
+        title="Backend Task",
+        task_class="backend",
+        work_spec=_work_spec("Backend Task"),
+        capability_tags=["backend"],
+        phase_id=phase["id"],
+        milestone_id=milestone["id"],
+    )
+    frontend_task = mcp_tools.create_task(
+        project_id=project_id,
+        title="Frontend Task",
+        task_class="frontend",
+        work_spec=_work_spec("Frontend Task"),
+        capability_tags=["frontend"],
+        phase_id=phase["id"],
+        milestone_id=milestone["id"],
+    )
+
+    from_list = mcp_tools.list_ready_tasks(
+        project_id=project_id,
+        agent_id="agent-1",
+        capabilities=["backend"],
+    )
+    from_string = mcp_tools.list_ready_tasks(
+        project_id=project_id,
+        agent_id="agent-1",
+        capabilities="backend",
+    )
+    from_csv = mcp_tools.list_ready_tasks(
+        project_id=project_id,
+        agent_id="agent-1",
+        capabilities="backend, frontend",
+    )
+
+    from_list_ids = {item["id"] for item in from_list["items"]}
+    from_string_ids = {item["id"] for item in from_string["items"]}
+    from_csv_ids = {item["id"] for item in from_csv["items"]}
+
+    assert backend_task["id"] in from_list_ids
+    assert backend_task["id"] in from_string_ids
+    assert frontend_task["id"] not in from_string_ids
+    assert backend_task["id"] in from_csv_ids
+    assert frontend_task["id"] in from_csv_ids
+
+    try:
+        mcp_tools.list_ready_tasks(
+            project_id=project_id,
+            agent_id="agent-1",
+            capabilities=[123],  # type: ignore[list-item]
+        )
+        raise AssertionError("Expected ValueError")
+    except ValueError as exc:
+        assert str(exc) == "INVALID_CAPABILITIES"
+
+
 def test_mcp_task_context_returns_ancestors_and_dependents():
     project = mcp_tools.create_project(name="context-proj")
     project_id = project["id"]

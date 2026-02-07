@@ -72,6 +72,7 @@ _DOMAIN_ERRORS: dict[str, tuple[str, bool]] = {
     "INVALID_GATE_OUTCOME": ("Gate decision outcome is invalid", False),
     "GATE_DECISION_REQUIRED": ("Gate decision is required before integration", False),
     "POLICY_CONFIG_INVALID": ("Gate policy configuration is invalid", False),
+    "INVALID_CAPABILITIES": ("Capabilities must be a string or list of strings", False),
 }
 
 

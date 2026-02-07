@@ -33,6 +33,13 @@ def test_normalize_invalid_integration_result_error_code():
     assert payload["retryable"] is False
 
 
+def test_normalize_invalid_capabilities_error_code():
+    payload = _normalize_tool_exception(ValueError("INVALID_CAPABILITIES"))
+    assert payload["code"] == "INVALID_CAPABILITIES"
+    assert payload["message"] == "Capabilities must be a string or list of strings"
+    assert payload["retryable"] is False
+
+
 def test_normalize_gate_decision_required_error_code():
     payload = _normalize_tool_exception(ValueError("GATE_DECISION_REQUIRED"))
     assert payload["code"] == "GATE_DECISION_REQUIRED"
