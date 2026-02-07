@@ -1,5 +1,6 @@
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
+import CheckpointList from "@/components/organisms/CheckpointList";
 import {
   Tabs,
   TabsContent,
@@ -46,12 +47,13 @@ export default function WorkspacePage() {
         </TabsContent>
 
         <TabsContent value="checkpoints">
-          <div className="mt-4">
-            <h2 className="text-xl font-semibold">Checkpoints</h2>
-            <p className="text-muted-foreground mt-1">
-              Gate checkpoint overview will be rendered here.
-            </p>
-          </div>
+          {projectId ? (
+            <CheckpointList projectId={projectId} />
+          ) : (
+            <div className="mt-4">
+              <p className="text-muted-foreground">No project selected.</p>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>
