@@ -22,6 +22,7 @@ export function useProjects() {
   return useQuery({
     queryKey: ["projects"],
     queryFn: () => apiFetch<ListProjectsResponse>("/v1/projects"),
+    refetchInterval: 10_000,
   });
 }
 
