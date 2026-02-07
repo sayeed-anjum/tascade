@@ -370,9 +370,17 @@ class SqlStore:
     def get_task(self, task_id: str) -> dict[str, Any] | None:
         with SessionLocal() as session:
             task = session.get(TaskModel, task_id)
-            if task is None:
+            if task is not None:
+                return _task_to_dict(task)
+
+            matches = session.execute(
+                select(TaskModel).where(TaskModel.short_id == task_id)
+            ).scalars().all()
+            if not matches:
                 return None
-            return _task_to_dict(task)
+            if len(matches) > 1:
+                raise ValueError("TASK_REF_AMBIGUOUS")
+            return _task_to_dict(matches[0])
 
     def _children(self, session, project_id: str, from_task_id: str) -> list[str]:
         rows = session.execute(

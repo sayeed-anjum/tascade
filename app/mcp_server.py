@@ -34,6 +34,7 @@ MCP_TOOL_NAMES = [
 _DOMAIN_ERRORS: dict[str, tuple[str, bool]] = {
     "PROJECT_NOT_FOUND": ("Project not found", False),
     "TASK_NOT_FOUND": ("Task not found", False),
+    "TASK_REF_AMBIGUOUS": ("Task reference matched multiple tasks", False),
     "CHANGESET_NOT_FOUND": ("Plan changeset not found", False),
     "CYCLE_DETECTED": ("Dependency introduces graph cycle", False),
     "PROJECT_MISMATCH": ("Task/dependency project mismatch", False),

@@ -172,6 +172,39 @@ def test_mcp_read_tools_get_project_list_projects_and_get_task():
     fetched_task = mcp_tools.get_task(task_id=task["id"])
     assert fetched_task["id"] == task["id"]
     assert fetched_task["project_id"] == created_a["id"]
+    fetched_by_short_id = mcp_tools.get_task(task_id=task["short_id"])
+    assert fetched_by_short_id["id"] == task["id"]
+
+
+def test_mcp_get_task_rejects_ambiguous_short_id():
+    project_a = mcp_tools.create_project(name="ambiguous-proj-a")
+    project_b = mcp_tools.create_project(name="ambiguous-proj-b")
+    phase_a, milestone_a = _create_hierarchy(project_a["id"], "A")
+    phase_b, milestone_b = _create_hierarchy(project_b["id"], "B")
+
+    task_a = mcp_tools.create_task(
+        project_id=project_a["id"],
+        title="Task A",
+        task_class="backend",
+        work_spec=_work_spec("Task A"),
+        phase_id=phase_a["id"],
+        milestone_id=milestone_a["id"],
+    )
+    task_b = mcp_tools.create_task(
+        project_id=project_b["id"],
+        title="Task B",
+        task_class="backend",
+        work_spec=_work_spec("Task B"),
+        phase_id=phase_b["id"],
+        milestone_id=milestone_b["id"],
+    )
+    assert task_a["short_id"] == task_b["short_id"]
+
+    try:
+        mcp_tools.get_task(task_id=task_a["short_id"])
+        raise AssertionError("Expected ValueError")
+    except ValueError as exc:
+        assert str(exc) == "TASK_REF_AMBIGUOUS"
 
 
 def test_mcp_tool_contract_contains_setup_and_execution_tools():

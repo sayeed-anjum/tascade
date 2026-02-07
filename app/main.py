@@ -174,7 +174,16 @@ def get_ready_tasks(project_id: str, agent_id: str, capabilities: str = "") -> G
 
 @app.get("/v1/tasks/{task_id}", response_model=Task)
 def get_task(task_id: str) -> Task:
-    task = STORE.get_task(task_id)
+    try:
+        task = STORE.get_task(task_id)
+    except ValueError as exc:
+        code = "TASK_REF_AMBIGUOUS" if str(exc) == "TASK_REF_AMBIGUOUS" else "INVARIANT_VIOLATION"
+        raise HTTPException(
+            status_code=409,
+            detail=ErrorResponse(
+                error={"code": code, "message": str(exc), "retryable": False}
+            ).model_dump(),
+        )
     if task is None:
         raise HTTPException(
             status_code=404,
