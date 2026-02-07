@@ -411,3 +411,62 @@ class ApplyPlanChangesetResponse(BaseModel):
     plan_version: PlanVersion
     invalidated_claim_task_ids: list[str]
     invalidated_reservation_task_ids: list[str]
+
+
+class Phase(BaseModel):
+    id: str
+    short_id: str | None = None
+    project_id: str
+    name: str
+    sequence: int
+    created_at: str
+    updated_at: str
+
+
+class Milestone(BaseModel):
+    id: str
+    short_id: str | None = None
+    project_id: str
+    phase_id: str | None = None
+    name: str
+    sequence: int
+    created_at: str
+    updated_at: str
+
+
+class GraphTask(BaseModel):
+    """Task representation for the project graph endpoint.
+
+    Uses ``dict`` for ``work_spec`` so that enriched fields such as
+    ``candidate_readiness`` are preserved in the response, matching the
+    MCP ``get_project_graph`` output shape.
+    """
+
+    id: str
+    short_id: str | None = None
+    project_id: str
+    phase_id: str | None = None
+    milestone_id: str | None = None
+    title: str
+    description: str | None = None
+    state: str
+    priority: int
+    work_spec: dict[str, Any]
+    task_class: str
+    capability_tags: list[str]
+    expected_touches: list[str]
+    exclusive_paths: list[str]
+    shared_paths: list[str]
+    introduced_in_plan_version: int | None = None
+    deprecated_in_plan_version: int | None = None
+    version: int
+    created_at: str
+    updated_at: str
+
+
+class ProjectGraphResponse(BaseModel):
+    project: Project
+    phases: list[Phase]
+    milestones: list[Milestone]
+    tasks: list[GraphTask]
+    dependencies: list[DependencyEdge]

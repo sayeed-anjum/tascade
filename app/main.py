@@ -33,6 +33,7 @@ from app.schemas import (
     PlanChangeset,
     PlanVersion,
     Project,
+    ProjectGraphResponse,
     Task,
     TaskExecutionSnapshot,
     TaskStateTransitionRequest,
@@ -82,6 +83,20 @@ def get_project(project_id: str) -> Project:
             ).model_dump(),
         )
     return Project(**project)
+
+
+@app.get("/v1/projects/{project_id}/graph", response_model=ProjectGraphResponse)
+def get_project_graph(project_id: str, include_completed: bool = True) -> ProjectGraphResponse:
+    try:
+        graph = STORE.get_project_graph(project_id=project_id, include_completed=include_completed)
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    return ProjectGraphResponse(**graph)
 
 
 @app.post("/v1/gate-rules", response_model=GateRule, status_code=status.HTTP_201_CREATED)
