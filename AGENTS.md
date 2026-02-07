@@ -84,6 +84,7 @@ For any task with a Tascade `short_id`, provenance must be isolated and commit-b
 5. If work was accidentally mixed across tasks in one worktree, split the changes into task-specific branches/commits first, then update task states.
 6. For tracked short-ID tasks, do not commit directly to integration branches (for example `main` or `dev`); use a task branch/worktree and merge only after review approval.
 7. `implemented` status does not authorize direct integration-branch commits; it only signals review readiness.
+8. Never keep integration branches (for example `main`/`dev`) checked out in linked worktrees under `.worktrees/*`; integration branches must be owned by the primary repository workspace only.
 
 Allowed exceptions:
 
@@ -181,3 +182,11 @@ When an operation fails in normal workflow (MCP/API/DB):
 4. Do not use data-level or manual workarounds to bypass unresolved defects.
 
 If temporary fallback is unavoidable due external process staleness (for example, MCP server not yet reloaded), record the reason explicitly and schedule immediate remediation (restart/reload) before further feature work.
+
+## Git Worktree Guardrail (Required)
+
+To avoid accidental integration drift and branch-lock confusion:
+
+1. Do not create linked worktrees that check out `main` or other integration branches.
+2. If detected, immediately detach/remove that linked worktree and restore the integration branch checkout in the primary workspace.
+3. Reserve linked worktrees for task branches with short-ID scoped work only.
