@@ -62,6 +62,7 @@ def test_task_state_transition_happy_path_and_forced_transition():
             "project_id": project_id,
             "new_state": "integrated",
             "actor_id": "lead-dev",
+            "reviewed_by": "senior-reviewer",
             "reason": "merge complete",
         },
     )
@@ -99,6 +100,59 @@ def test_invalid_transition_is_rejected():
     )
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "INVALID_STATE_TRANSITION"
+
+
+def test_integration_requires_reviewer_and_disallows_self_review():
+    client = TestClient(app)
+    project_id = _create_project(client, name="proj-review-gate")
+    task_id = _create_task(client, project_id)
+
+    in_progress = client.post(
+        f"/v1/tasks/{task_id}/state",
+        json={
+            "project_id": project_id,
+            "new_state": "in_progress",
+            "actor_id": "agent-dev",
+            "reason": "start",
+        },
+    )
+    assert in_progress.status_code == 200
+
+    implemented = client.post(
+        f"/v1/tasks/{task_id}/state",
+        json={
+            "project_id": project_id,
+            "new_state": "implemented",
+            "actor_id": "agent-dev",
+            "reason": "done coding",
+        },
+    )
+    assert implemented.status_code == 200
+
+    missing_review = client.post(
+        f"/v1/tasks/{task_id}/state",
+        json={
+            "project_id": project_id,
+            "new_state": "integrated",
+            "actor_id": "agent-dev",
+            "reason": "attempt integrate without reviewer",
+        },
+    )
+    assert missing_review.status_code == 409
+    assert missing_review.json()["error"]["code"] == "REVIEW_REQUIRED_FOR_INTEGRATION"
+
+    self_review = client.post(
+        f"/v1/tasks/{task_id}/state",
+        json={
+            "project_id": project_id,
+            "new_state": "integrated",
+            "actor_id": "agent-dev",
+            "reviewed_by": "agent-dev",
+            "reason": "self approval is not allowed",
+        },
+    )
+    assert self_review.status_code == 409
+    assert self_review.json()["error"]["code"] == "SELF_REVIEW_NOT_ALLOWED"
 
 
 def test_transition_releases_active_lease():

@@ -47,6 +47,8 @@ class CreateTaskRequest(BaseModel):
         "db_schema",
         "security",
         "cross_cutting",
+        "review_gate",
+        "merge_gate",
         "frontend",
         "backend",
         "crud",
@@ -99,6 +101,7 @@ class TaskStateTransitionRequest(BaseModel):
     ]
     actor_id: str
     reason: str = Field(min_length=1)
+    reviewed_by: str | None = None
     force: bool = False
 
 

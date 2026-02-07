@@ -18,12 +18,30 @@ When working in this repository, prefer the Tascade MCP tools for project coordi
    - `list_ready_tasks(project_id, agent_id, capabilities)`
    - `create_task(...)`
    - `create_dependency(...)`
+   - For checkpoint tasks, use `task_class` = `review_gate` or `merge_gate` (no `cross_cutting` workaround).
 3. Execute:
    - `claim_task(task_id, project_id, agent_id, claim_mode)`
    - `heartbeat_task(task_id, project_id, agent_id, lease_token)`
+   - `transition_task_state(task_id, project_id, new_state, actor_id, reason, reviewed_by?, force=false)`
 4. Replan:
    - `create_plan_changeset(...)`
    - `apply_plan_changeset(changeset_id, allow_rebase=false)`
+
+## Task Close-out Checklist (Required)
+
+Before or at commit time for any claimed task:
+
+1. Verify implementation/tests are complete for the scoped task.
+2. Transition task state through completion path:
+   - `in_progress` (if not already)
+   - `implemented`
+   - `integrated` only after review approval.
+3. For `implemented -> integrated`, provide `reviewed_by`:
+   - Must be non-empty.
+   - Must not equal `actor_id` (no self-review).
+4. Use a clear reason in each transition (for auditability).
+5. Confirm final task state is `integrated` via `get_task(task_id)`.
+6. Only then create/finalize the commit.
 
 ## Current Structure (Initialized)
 
@@ -37,4 +55,4 @@ When working in this repository, prefer the Tascade MCP tools for project coordi
 ## Notes
 
 - Historical tasks are currently represented as normal tasks with `[Historical]` title prefix.
-- A dedicated state-transition primitive is planned to mark historical tasks as integrated/done cleanly.
+- Historical completion backfill should use `transition_task_state(..., new_state="integrated", force=true)`.

@@ -23,6 +23,8 @@ CREATE TYPE task_class AS ENUM (
   'db_schema',
   'security',
   'cross_cutting',
+  'review_gate',
+  'merge_gate',
   'frontend',
   'backend',
   'crud',

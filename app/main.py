@@ -266,6 +266,7 @@ def transition_task_state(task_id: str, payload: TaskStateTransitionRequest) -> 
             new_state=payload.new_state,
             actor_id=payload.actor_id,
             reason=payload.reason,
+            reviewed_by=payload.reviewed_by,
             force=payload.force,
         )
     except KeyError:
@@ -280,6 +281,8 @@ def transition_task_state(task_id: str, payload: TaskStateTransitionRequest) -> 
             "INVALID_STATE_TRANSITION": "INVALID_STATE_TRANSITION",
             "STATE_NOT_ALLOWED": "STATE_NOT_ALLOWED",
             "INVALID_STATE": "INVALID_STATE",
+            "REVIEW_REQUIRED_FOR_INTEGRATION": "REVIEW_REQUIRED_FOR_INTEGRATION",
+            "SELF_REVIEW_NOT_ALLOWED": "SELF_REVIEW_NOT_ALLOWED",
         }
         code = code_map.get(str(exc), "INVARIANT_VIOLATION")
         raise HTTPException(

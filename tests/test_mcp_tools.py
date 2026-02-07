@@ -205,3 +205,34 @@ def test_mcp_transition_task_state_tool():
         reason="begin implementation",
     )
     assert moved["task"]["state"] == "in_progress"
+
+    implemented = mcp_tools.transition_task_state(
+        task_id=task["id"],
+        project_id=project["id"],
+        new_state="implemented",
+        actor_id="lead-dev",
+        reason="implementation complete",
+    )
+    assert implemented["task"]["state"] == "implemented"
+
+    try:
+        mcp_tools.transition_task_state(
+            task_id=task["id"],
+            project_id=project["id"],
+            new_state="integrated",
+            actor_id="lead-dev",
+            reason="merge without review should fail",
+        )
+        raise AssertionError("Expected ValueError")
+    except ValueError as exc:
+        assert str(exc) == "REVIEW_REQUIRED_FOR_INTEGRATION"
+
+    integrated = mcp_tools.transition_task_state(
+        task_id=task["id"],
+        project_id=project["id"],
+        new_state="integrated",
+        actor_id="lead-dev",
+        reviewed_by="senior-reviewer",
+        reason="review passed and merged",
+    )
+    assert integrated["task"]["state"] == "integrated"

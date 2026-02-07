@@ -28,6 +28,8 @@ def test_model_enums_use_lowercase_value_variants():
         "db_schema",
         "security",
         "cross_cutting",
+        "review_gate",
+        "merge_gate",
         "frontend",
         "backend",
         "crud",

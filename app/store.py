@@ -380,6 +380,7 @@ class SqlStore:
         new_state: str,
         actor_id: str,
         reason: str,
+        reviewed_by: str | None = None,
         force: bool = False,
     ) -> dict[str, Any]:
         with SessionLocal.begin() as session:
@@ -401,6 +402,14 @@ class SqlStore:
             if not force and target not in NORMAL_STATE_TRANSITIONS.get(current, set()):
                 raise ValueError("INVALID_STATE_TRANSITION")
 
+            # Non-forced integration must be explicitly review-gated by a human reviewer.
+            if not force and target == TaskState.INTEGRATED:
+                reviewer = (reviewed_by or "").strip()
+                if not reviewer:
+                    raise ValueError("REVIEW_REQUIRED_FOR_INTEGRATION")
+                if reviewer == actor_id:
+                    raise ValueError("SELF_REVIEW_NOT_ALLOWED")
+
             if current == TaskState.CLAIMED:
                 self._release_active_lease(session, task_id)
             if current == TaskState.RESERVED:
@@ -418,6 +427,7 @@ class SqlStore:
                     "from_state": current.value,
                     "to_state": target.value,
                     "reason": reason,
+                    "reviewed_by": reviewed_by,
                     "force": force,
                 },
                 caused_by=actor_id,

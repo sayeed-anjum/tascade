@@ -51,6 +51,8 @@ class TaskClass(str, Enum):
     DB_SCHEMA = "db_schema"
     SECURITY = "security"
     CROSS_CUTTING = "cross_cutting"
+    REVIEW_GATE = "review_gate"
+    MERGE_GATE = "merge_gate"
     FRONTEND = "frontend"
     BACKEND = "backend"
     CRUD = "crud"
