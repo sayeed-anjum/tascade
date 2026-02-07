@@ -82,6 +82,30 @@ class Task(BaseModel):
     updated_at: str
 
 
+class TaskStateTransitionRequest(BaseModel):
+    project_id: str
+    new_state: Literal[
+        "backlog",
+        "ready",
+        "reserved",
+        "claimed",
+        "in_progress",
+        "implemented",
+        "integrated",
+        "conflict",
+        "blocked",
+        "abandoned",
+        "cancelled",
+    ]
+    actor_id: str
+    reason: str = Field(min_length=1)
+    force: bool = False
+
+
+class TaskStateTransitionResponse(BaseModel):
+    task: Task
+
+
 class CreateDependencyRequest(BaseModel):
     project_id: str
     from_task_id: str

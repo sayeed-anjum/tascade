@@ -155,6 +155,7 @@ def test_mcp_tool_contract_contains_setup_and_execution_tools():
         "create_milestone",
         "create_task",
         "get_task",
+        "transition_task_state",
         "create_dependency",
         "list_ready_tasks",
         "claim_task",
@@ -186,3 +187,21 @@ def test_mcp_wrapped_tool_reports_domain_code():
     except RuntimeError as exc:
         payload = json.loads(str(exc))
     assert payload["error"]["code"] == "PROJECT_NOT_FOUND"
+
+
+def test_mcp_transition_task_state_tool():
+    project = mcp_tools.create_project(name="mcp-transition-proj")
+    task = mcp_tools.create_task(
+        project_id=project["id"],
+        title="Transition me",
+        task_class="backend",
+        work_spec=_work_spec("Transition me"),
+    )
+    moved = mcp_tools.transition_task_state(
+        task_id=task["id"],
+        project_id=project["id"],
+        new_state="in_progress",
+        actor_id="lead-dev",
+        reason="begin implementation",
+    )
+    assert moved["task"]["state"] == "in_progress"

@@ -21,6 +21,8 @@ from app.schemas import (
     Project,
     Task,
     TaskExecutionSnapshot,
+    TaskStateTransitionRequest,
+    TaskStateTransitionResponse,
     TaskReservation,
     TaskSummary,
 )
@@ -253,6 +255,40 @@ def assign_task(task_id: str, payload: AssignTaskRequest) -> TaskReservation:
             ).model_dump(),
         )
     return TaskReservation(**reservation)
+
+
+@app.post("/v1/tasks/{task_id}/state", response_model=TaskStateTransitionResponse)
+def transition_task_state(task_id: str, payload: TaskStateTransitionRequest) -> TaskStateTransitionResponse:
+    try:
+        task = STORE.transition_task_state(
+            task_id=task_id,
+            project_id=payload.project_id,
+            new_state=payload.new_state,
+            actor_id=payload.actor_id,
+            reason=payload.reason,
+            force=payload.force,
+        )
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "TASK_NOT_FOUND", "message": "Task not found", "retryable": False}
+            ).model_dump(),
+        )
+    except ValueError as exc:
+        code_map = {
+            "INVALID_STATE_TRANSITION": "INVALID_STATE_TRANSITION",
+            "STATE_NOT_ALLOWED": "STATE_NOT_ALLOWED",
+            "INVALID_STATE": "INVALID_STATE",
+        }
+        code = code_map.get(str(exc), "INVARIANT_VIOLATION")
+        raise HTTPException(
+            status_code=409,
+            detail=ErrorResponse(
+                error={"code": code, "message": str(exc), "retryable": False}
+            ).model_dump(),
+        )
+    return TaskStateTransitionResponse(task=Task(**task))
 
 
 @app.post("/v1/plans/changesets", response_model=PlanChangeset, status_code=status.HTTP_201_CREATED)

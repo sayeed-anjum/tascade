@@ -83,6 +83,26 @@ def get_task(task_id: str) -> dict[str, Any]:
     return task
 
 
+def transition_task_state(
+    *,
+    task_id: str,
+    project_id: str,
+    new_state: str,
+    actor_id: str,
+    reason: str,
+    force: bool = False,
+) -> dict[str, Any]:
+    task = STORE.transition_task_state(
+        task_id=task_id,
+        project_id=project_id,
+        new_state=new_state,
+        actor_id=actor_id,
+        reason=reason,
+        force=force,
+    )
+    return {"task": task}
+
+
 def create_dependency(
     *,
     project_id: str,

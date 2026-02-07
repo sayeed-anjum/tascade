@@ -18,6 +18,7 @@ MCP_TOOL_NAMES = [
     "create_milestone",
     "create_task",
     "get_task",
+    "transition_task_state",
     "create_dependency",
     "list_ready_tasks",
     "claim_task",
@@ -43,6 +44,9 @@ _DOMAIN_ERRORS: dict[str, tuple[str, bool]] = {
     "RESERVATION_EXISTS": ("Task already has an active reservation", False),
     "TASK_NOT_CLAIMABLE": ("Task is not claimable in current state", False),
     "TASK_NOT_ASSIGNABLE": ("Task is not assignable in current state", False),
+    "INVALID_STATE_TRANSITION": ("State transition is not allowed", False),
+    "STATE_NOT_ALLOWED": ("Target state is not allowed via this operation", False),
+    "INVALID_STATE": ("Unknown task state", False),
 }
 
 
@@ -100,6 +104,7 @@ def create_mcp_server():
     server.tool(name="create_milestone")(_wrap_tool(mcp_tools.create_milestone))
     server.tool(name="create_task")(_wrap_tool(mcp_tools.create_task))
     server.tool(name="get_task")(_wrap_tool(mcp_tools.get_task))
+    server.tool(name="transition_task_state")(_wrap_tool(mcp_tools.transition_task_state))
     server.tool(name="create_dependency")(_wrap_tool(mcp_tools.create_dependency))
     server.tool(name="list_ready_tasks")(_wrap_tool(mcp_tools.list_ready_tasks))
     server.tool(name="claim_task")(_wrap_tool(mcp_tools.claim_task))

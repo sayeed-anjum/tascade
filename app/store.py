@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from app.db import SessionLocal, init_db, reset_db
 from app.models import (
     DependencyEdgeModel,
+    EventLogModel,
     LeaseModel,
     LeaseStatus,
     MilestoneModel,
@@ -187,6 +188,35 @@ def _snapshot_to_dict(model: TaskExecutionSnapshotModel) -> dict[str, Any]:
     }
 
 
+def _event_to_dict(model: EventLogModel) -> dict[str, Any]:
+    return {
+        "id": model.id,
+        "project_id": model.project_id,
+        "entity_type": model.entity_type,
+        "entity_id": model.entity_id,
+        "event_type": model.event_type,
+        "payload": model.payload,
+        "caused_by": model.caused_by,
+        "correlation_id": model.correlation_id,
+        "created_at": _iso(model.created_at),
+    }
+
+
+NORMAL_STATE_TRANSITIONS: dict[TaskState, set[TaskState]] = {
+    TaskState.BACKLOG: {TaskState.READY, TaskState.CANCELLED, TaskState.ABANDONED},
+    TaskState.READY: {TaskState.IN_PROGRESS, TaskState.BLOCKED, TaskState.CANCELLED, TaskState.ABANDONED},
+    TaskState.CLAIMED: {TaskState.IN_PROGRESS, TaskState.BLOCKED, TaskState.CANCELLED, TaskState.ABANDONED},
+    TaskState.RESERVED: {TaskState.READY, TaskState.BLOCKED, TaskState.CANCELLED, TaskState.ABANDONED},
+    TaskState.IN_PROGRESS: {TaskState.IMPLEMENTED, TaskState.BLOCKED, TaskState.CANCELLED, TaskState.ABANDONED},
+    TaskState.IMPLEMENTED: {TaskState.INTEGRATED, TaskState.CONFLICT, TaskState.BLOCKED},
+    TaskState.CONFLICT: {TaskState.IN_PROGRESS, TaskState.BLOCKED, TaskState.ABANDONED},
+    TaskState.BLOCKED: {TaskState.READY, TaskState.IN_PROGRESS, TaskState.CANCELLED, TaskState.ABANDONED},
+    TaskState.INTEGRATED: set(),
+    TaskState.ABANDONED: set(),
+    TaskState.CANCELLED: set(),
+}
+
+
 class SqlStore:
     def __init__(self) -> None:
         init_db()
@@ -319,6 +349,92 @@ class SqlStore:
             session.add(edge)
             session.flush()
             return _dependency_to_dict(edge)
+
+    def _emit_task_event(
+        self,
+        session,
+        *,
+        project_id: str,
+        task_id: str,
+        event_type: str,
+        payload: dict[str, Any],
+        caused_by: str,
+    ) -> None:
+        event = EventLogModel(
+            project_id=project_id,
+            entity_type="task",
+            entity_id=task_id,
+            event_type=event_type,
+            payload=payload,
+            caused_by=caused_by,
+            correlation_id=None,
+            created_at=_now(),
+        )
+        session.add(event)
+
+    def transition_task_state(
+        self,
+        *,
+        task_id: str,
+        project_id: str,
+        new_state: str,
+        actor_id: str,
+        reason: str,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        with SessionLocal.begin() as session:
+            task = session.get(TaskModel, task_id)
+            if task is None or task.project_id != project_id:
+                raise KeyError("TASK_NOT_FOUND")
+            try:
+                target = TaskState(new_state)
+            except ValueError as exc:
+                raise ValueError("INVALID_STATE") from exc
+
+            if target in {TaskState.CLAIMED, TaskState.RESERVED}:
+                raise ValueError("STATE_NOT_ALLOWED")
+
+            current = task.state
+            if current == target:
+                return _task_to_dict(task)
+
+            if not force and target not in NORMAL_STATE_TRANSITIONS.get(current, set()):
+                raise ValueError("INVALID_STATE_TRANSITION")
+
+            if current == TaskState.CLAIMED:
+                self._release_active_lease(session, task_id)
+            if current == TaskState.RESERVED:
+                self._release_active_reservation(session, task_id)
+
+            task.state = target
+            task.updated_at = _now()
+
+            self._emit_task_event(
+                session,
+                project_id=project_id,
+                task_id=task_id,
+                event_type="task_state_transitioned",
+                payload={
+                    "from_state": current.value,
+                    "to_state": target.value,
+                    "reason": reason,
+                    "force": force,
+                },
+                caused_by=actor_id,
+            )
+            session.flush()
+            return _task_to_dict(task)
+
+    def list_task_events(self, *, project_id: str, task_id: str) -> list[dict[str, Any]]:
+        with SessionLocal() as session:
+            events = session.execute(
+                select(EventLogModel).where(
+                    EventLogModel.project_id == project_id,
+                    EventLogModel.entity_type == "task",
+                    EventLogModel.entity_id == task_id,
+                )
+            ).scalars().all()
+            return [_event_to_dict(event) for event in events]
 
     def get_project_graph(self, project_id: str, include_completed: bool = True) -> dict[str, Any]:
         with SessionLocal() as session:
