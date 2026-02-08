@@ -284,3 +284,119 @@ def test_role_constants_defined():
     assert PLANNER == "planner"
     assert REVIEWER == "reviewer"
     assert OPERATOR == "operator"
+
+
+# ---------------------------------------------------------------------------
+# 10. Permission enforcement on alerts, acknowledge, actions, health
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.usefixtures("_auth_enabled")
+def test_unknown_role_blocked_on_alerts_actions_health(project_id: str):
+    """Unknown role should get 403 on alerts, actions, health endpoints."""
+    headers = {"X-User-Role": "hacker"}
+    for path, params in [
+        ("/v1/metrics/alerts", {"project_id": project_id}),
+        ("/v1/metrics/actions", {"project_id": project_id}),
+        ("/v1/metrics/health", {"project_id": project_id}),
+    ]:
+        resp = client.get(path, params=params, headers=headers)
+        assert resp.status_code == 403, f"Unknown role should get 403 on {path}"
+
+
+@pytest.mark.usefixtures("_auth_enabled")
+def test_operator_blocked_on_alerts_actions_health(project_id: str):
+    """Operator role should be denied access to alerts, actions, health."""
+    headers = {"X-User-Role": "operator"}
+    for path, params in [
+        ("/v1/metrics/alerts", {"project_id": project_id}),
+        ("/v1/metrics/actions", {"project_id": project_id}),
+        ("/v1/metrics/health", {"project_id": project_id}),
+    ]:
+        resp = client.get(path, params=params, headers=headers)
+        assert resp.status_code == 403, f"Operator should get 403 on {path}"
+
+
+@pytest.mark.usefixtures("_auth_enabled")
+def test_reviewer_blocked_on_acknowledge_and_actions(project_id: str):
+    """Reviewer role should be denied acknowledge and actions."""
+    headers = {"X-User-Role": "reviewer"}
+
+    # actions
+    resp = client.get(
+        "/v1/metrics/actions",
+        params={"project_id": project_id},
+        headers=headers,
+    )
+    assert resp.status_code == 403
+
+    # acknowledge (POST) - use a fake alert_id since permission check runs first
+    resp = client.post(
+        "/v1/metrics/alerts/fake-id/acknowledge",
+        headers=headers,
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.usefixtures("_auth_enabled")
+def test_reviewer_can_access_alerts_and_health(project_id: str):
+    """Reviewer role should have read access to alerts and health."""
+    headers = {"X-User-Role": "reviewer"}
+
+    resp = client.get(
+        "/v1/metrics/alerts",
+        params={"project_id": project_id},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+
+    resp = client.get(
+        "/v1/metrics/health",
+        params={"project_id": project_id},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+
+
+@pytest.mark.usefixtures("_auth_enabled")
+def test_planner_can_access_alerts_actions_health(project_id: str):
+    """Planner role should have full access to all new endpoints."""
+    headers = {"X-User-Role": "planner"}
+
+    resp = client.get("/v1/metrics/alerts", params={"project_id": project_id}, headers=headers)
+    assert resp.status_code == 200
+
+    resp = client.get("/v1/metrics/actions", params={"project_id": project_id}, headers=headers)
+    assert resp.status_code == 200
+
+    resp = client.get("/v1/metrics/health", params={"project_id": project_id}, headers=headers)
+    assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# 11. Drilldown pagination validation
+# ---------------------------------------------------------------------------
+
+
+def test_drilldown_negative_offset_returns_422(project_id: str):
+    resp = client.get(
+        "/v1/metrics/drilldown",
+        params={"project_id": project_id, "metric": "velocity", "offset": -5},
+    )
+    assert resp.status_code == 422
+
+
+def test_drilldown_zero_limit_returns_422(project_id: str):
+    resp = client.get(
+        "/v1/metrics/drilldown",
+        params={"project_id": project_id, "metric": "velocity", "limit": 0},
+    )
+    assert resp.status_code == 422
+
+
+def test_drilldown_negative_limit_returns_422(project_id: str):
+    resp = client.get(
+        "/v1/metrics/drilldown",
+        params={"project_id": project_id, "metric": "velocity", "limit": -1},
+    )
+    assert resp.status_code == 422

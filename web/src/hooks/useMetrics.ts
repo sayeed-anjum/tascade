@@ -38,6 +38,7 @@ export function useMetricsTrends(
         granularity,
       }),
     enabled: !!projectId && !!metric && !!startDate && !!endDate,
+    refetchInterval: 60_000,
   });
 }
 
@@ -55,5 +56,6 @@ export function useMetricsBreakdown(
         dimension,
       }),
     enabled: !!projectId && !!metric,
+    refetchInterval: 60_000,
   });
 }

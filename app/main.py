@@ -971,8 +971,8 @@ def get_metrics_drilldown(
     filters: str | None = Query(None),
     sort_by: Literal["value", "timestamp", "task_id"] = Query("value"),
     sort_order: Literal["asc", "desc"] = Query("desc"),
-    limit: int = Query(50),
-    offset: int = Query(0),
+    limit: int = Query(50, ge=1),
+    offset: int = Query(0, ge=0),
     _perm: None = Depends(require_permission("drilldown")),
 ) -> MetricsDrilldownResponse:
     if not STORE.project_exists(project_id):
@@ -1025,6 +1025,7 @@ def list_metrics_alerts(
     severity: str | None = Query(None),
     acknowledged: str | None = Query(None),
     limit: int = Query(50),
+    _perm: None = Depends(require_permission("alerts")),
 ) -> MetricsAlertListResponse:
     if not STORE.project_exists(project_id):
         raise HTTPException(
@@ -1057,6 +1058,7 @@ def list_metrics_alerts(
 def acknowledge_alert(
     alert_id: str,
     response: Response,
+    _perm: None = Depends(require_permission("alerts:acknowledge")),
 ) -> AcknowledgeAlertResponse:
     try:
         result = STORE.acknowledge_alert(alert_id)
@@ -1080,6 +1082,7 @@ def acknowledge_alert(
 def get_workflow_actions(
     response: Response,
     project_id: str = Query(...),
+    _perm: None = Depends(require_permission("actions")),
 ) -> WorkflowActionsResponse:
     if not STORE.project_exists(project_id):
         raise HTTPException(
@@ -1108,6 +1111,7 @@ def get_workflow_actions(
 def get_metrics_health(
     response: Response,
     project_id: str = Query(...),
+    _perm: None = Depends(require_permission("health")),
 ) -> MetricsHealthResponse:
     if not STORE.project_exists(project_id):
         raise HTTPException(
