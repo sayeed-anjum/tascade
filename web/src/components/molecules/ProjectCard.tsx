@@ -74,6 +74,8 @@ export default function ProjectCard({ project }: ProjectCardProps) {
         <CardHeader>
           <div className="flex items-center gap-2">
             <span
+              role="img"
+              aria-label={`Health: ${health}`}
               className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${HEALTH_DOT_CLASSES[health]}`}
               title={`Health: ${health}`}
             />

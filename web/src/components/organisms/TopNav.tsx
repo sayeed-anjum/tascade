@@ -87,7 +87,7 @@ export default function TopNav({
   }
 
   return (
-    <header className="border-b bg-background">
+    <header role="banner" className="border-b bg-background">
       <div className="flex h-14 items-center gap-4 px-4">
         {/* App name / logo */}
         <Link
@@ -102,7 +102,7 @@ export default function TopNav({
           value={projectId ?? ""}
           onValueChange={handleProjectChange}
         >
-          <SelectTrigger className="w-[220px]">
+          <SelectTrigger aria-label="Select project" className="w-[220px]">
             <SelectValue placeholder="Select project" />
           </SelectTrigger>
           <SelectContent>
@@ -119,9 +119,9 @@ export default function TopNav({
       </div>
 
       {/* Breadcrumb bar */}
-      <div className="border-t px-4 py-1.5">
+      <nav aria-label="Breadcrumb" className="border-t px-4 py-1.5">
         <TopNavBreadcrumb projectName={projectName} section={section} />
-      </div>
+      </nav>
     </header>
   );
 }
