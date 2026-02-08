@@ -23,12 +23,12 @@ This rulebook defines data quality (DQ) standards for all Tascade metrics source
 
 ### 1.3 Source Stream Categories
 
-Tascade metrics originate from the following core source streams:
+Tascade metrics originate from the following core source streams. The MVP DQ validation suite (`scripts/validate_dq_rules.py`) currently validates the 6 tables marked with ✓:
 
-1. **Task Management:** `task`, `phase`, `milestone`, `project`
-2. **Execution Tracking:** `lease`, `task_reservation`, `artifact`, `integration_attempt`
-3. **Dependency Management:** `dependency_edge`, `gate_candidate_link`
-4. **Governance:** `gate_rule`, `gate_decision`
+1. **Task Management:** `task` ✓, `phase`, `milestone`, `project` ✓
+2. **Execution Tracking:** `lease` ✓, `task_reservation`, `artifact` ✓, `integration_attempt`
+3. **Dependency Management:** `dependency_edge` ✓, `gate_candidate_link`
+4. **Governance:** `gate_rule`, `gate_decision` ✓
 5. **Audit & Events:** `event_log`, `task_changelog_entry`
 6. **Planning:** `plan_change_set`, `plan_version`
 7. **Context:** `task_execution_snapshot`, `task_context_cache`

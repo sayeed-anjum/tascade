@@ -713,7 +713,7 @@ All north star metrics are in MVP scope as they provide the foundational visibil
 
 The MVP metrics implementation will be considered successful when:
 
-1. **Coverage:** All 18 in-scope metrics compute accurately from live data
+1. **Coverage:** All 16 in-scope metrics compute accurately from live data
 2. **Freshness:** North Star metrics update within 1 hour; operational metrics within 15 minutes
 3. **Availability:** 99.5% uptime for metrics computation and API
 4. **Accuracy:** < 1% reconciliation delta against golden datasets
@@ -799,11 +799,11 @@ Examples:
 ### D. Related Documents
 
 - Phase 5 WBS Plan: `docs/plans/2026-02-08-phase-5-project-metrics-wbs-plan.md`
-- Task P5.M1.T5: Metric formulas specification (upcoming)
-- Task P5.M1.T6: Source-of-truth mapping (upcoming)
-- Task P5.M1.T7: Data contract schema (upcoming)
-- Task P5.M1.T8: Data quality rulebook (upcoming)
-- Task P5.M1.T9: MVP scope cut and release criteria (upcoming)
+- Task P5.M1.T5: Metric formulas specification (Complete)
+- Task P5.M1.T6: Source-of-truth mapping (Complete)
+- Task P5.M1.T7: Data contract schema (Complete)
+- Task P5.M1.T8: Data quality rulebook (Complete)
+- Task P5.M1.T9: MVP scope cut and release criteria (Complete)
 
 ---
 

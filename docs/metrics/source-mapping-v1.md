@@ -11,7 +11,7 @@
 ## 1. Introduction
 
 ### Purpose
-This document provides complete field-level lineage mapping for all 25 MVP metrics, connecting each formula component to its source-of-truth in the Tascade PostgreSQL database.
+This document provides complete field-level lineage mapping for all 16 MVP metrics, connecting each formula component to its source-of-truth in the Tascade PostgreSQL database.
 
 ### Data Sources Overview
 
@@ -1454,13 +1454,13 @@ WITH RECURSIVE dependency_path AS (
 - Metrics Catalogue v1.0: `docs/metrics/metrics-catalogue-v1.md` (P5.M1.T4)
 - Database Schema v0.1: `docs/db/schema-v0.1.sql`
 - Phase 5 WBS Plan: `docs/plans/2026-02-08-phase-5-project-metrics-wbs-plan.md`
-- Formula Specification: `docs/metrics/formula-spec-v1.md` (P5.M1.T5 - upcoming)
-- Data Contract Schema: `docs/metrics/api-contract-v1.md` (P5.M1.T7 - upcoming)
-- Data Quality Rulebook: `docs/metrics/dq-rulebook-v1.md` (P5.M1.T8 - upcoming)
+- Formula Specification: `docs/metrics/metric-formulas-v1.md` (P5.M1.T5 - Complete)
+- Data Contract Schema: `docs/metrics/api-contract-v1.md` (P5.M1.T7 - Complete)
+- Data Quality Rulebook: `docs/metrics/dq-rulebook-v1.md` (P5.M1.T8 - Complete)
 
 ### Sign-off Checklist
 
-- [x] All 25 MVP metrics mapped to source fields
+- [x] All 16 MVP metrics mapped to source fields
 - [x] All 10+ source tables documented with schemas
 - [x] Nullable field handling specified for all inputs
 - [x] Transformation logic documented with SQL examples
