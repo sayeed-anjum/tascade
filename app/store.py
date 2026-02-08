@@ -1898,7 +1898,7 @@ class SqlStore:
                     MetricsTrendPointModel.metric_key == metric,
                     MetricsTrendPointModel.time_grain == grain,
                     MetricsTrendPointModel.time_bucket >= start_dt,
-                    MetricsTrendPointModel.time_bucket < end_dt,
+                    MetricsTrendPointModel.time_bucket <= end_dt,
                 )
                 .order_by(MetricsTrendPointModel.time_bucket.asc())
             )

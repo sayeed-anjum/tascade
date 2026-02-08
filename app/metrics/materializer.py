@@ -118,7 +118,12 @@ def materialize_metrics(project_id: str) -> dict[str, Any]:
         # ------------------------------------------------------------------
         # North Star: FES
         # ------------------------------------------------------------------
-        active_count = sum(state_counts.get(s.value, 0) for s in _ACTIVE_STATES)
+        # Include integrated tasks as completed active work so projects
+        # that have finished most work don't show 0% efficiency.
+        active_count = (
+            integrated_count
+            + sum(state_counts.get(s.value, 0) for s in _ACTIVE_STATES)
+        )
         wait_count = sum(state_counts.get(s.value, 0) for s in _WAITING_STATES)
         blocked_time_proxy = blocked_count
 
@@ -129,6 +134,7 @@ def materialize_metrics(project_id: str) -> dict[str, Any]:
         total_flow = active_count + wait_count + blocked_time_proxy
         active_pct = round(_safe_divide(active_count, total_flow) * 100, 2)
         wait_pct = round(_safe_divide(wait_count, total_flow) * 100, 2)
+        blocked_pct = round(_safe_divide(blocked_time_proxy, total_flow) * 100, 2)
 
         # ------------------------------------------------------------------
         # North Star: IRS
@@ -146,7 +152,7 @@ def materialize_metrics(project_id: str) -> dict[str, Any]:
                 outcomes_list, recovery_times
             )
             success_count_irs = sum(1 for o in outcomes_list if o == "success")
-            success_rate = round(_safe_divide(success_count_irs, len(outcomes_list)) * 100, 2)
+            success_rate = round(_safe_divide(success_count_irs, len(outcomes_list)), 4)
             avg_recovery_seconds = (
                 sum(recovery_times) / len(recovery_times) if recovery_times else 0.0
             )
@@ -265,6 +271,7 @@ def materialize_metrics(project_id: str) -> dict[str, Any]:
                     "value": fes_pct,
                     "active_time_pct": active_pct,
                     "waiting_time_pct": wait_pct,
+                    "blocked_time_pct": blocked_pct,
                 },
                 "integration_reliability_score": {
                     "value": irs_pct,
