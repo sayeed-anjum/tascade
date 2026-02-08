@@ -411,13 +411,6 @@ class MetricsIncrementalJobRunner:
     def _payload_to_state(self, payload: object) -> TaskState:
         if not isinstance(payload, dict):
             raise ValueError("INVALID_EVENT_PAYLOAD")
-
-    def _next_start_event_id(self, *, project_id: str, mode: MetricsJobMode) -> int:
-        checkpoint = self.get_checkpoint(project_id=project_id, mode=mode)
-        if checkpoint is None:
-            return 1
-        return int(checkpoint["last_event_id"]) + 1
-
         to_state = payload.get("to_state")
         if not isinstance(to_state, str):
             raise ValueError("INVALID_EVENT_PAYLOAD")
@@ -425,6 +418,12 @@ class MetricsIncrementalJobRunner:
             return TaskState(to_state)
         except ValueError as exc:
             raise ValueError("INVALID_EVENT_PAYLOAD") from exc
+
+    def _next_start_event_id(self, *, project_id: str, mode: MetricsJobMode) -> int:
+        checkpoint = self.get_checkpoint(project_id=project_id, mode=mode)
+        if checkpoint is None:
+            return 1
+        return int(checkpoint["last_event_id"]) + 1
 
 
 RUNNER = MetricsIncrementalJobRunner()
