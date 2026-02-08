@@ -72,20 +72,20 @@ All other checks are automated.
 2. Bottleneck contribution (which stage causes most delay).
 3. Suggested actions confidence (e.g., reroute reviewer, batch merge, split task).
 
-## 4. WBS by Milestone
+## 4. Task Graph by Milestone (Short IDs)
 
 ## `P5.M1` - Metrics Product Definition and Data Contract
 
 **Outcome:** Metrics catalogue, formula specifications, data lineage, and verification contracts are finalized.
 
-| Work Package | Deliverable | Dependencies | Acceptance Criteria | Verification Criteria |
+| Task (short_id) | Deliverable | Dependencies | Acceptance Criteria | Verification Criteria |
 |---|---|---|---|---|
-| `M1.W1` | Metrics catalogue v1 (north-star + operational + actionability) | None | Prioritized list with business rationale and owners | Checklist validation against stakeholder goals |
-| `M1.W2` | Metric formulas + dimensions spec | `M1.W1` | Every metric has canonical formula, grain, dimensions, and SLA | Formula unit-test stubs generated for each metric |
-| `M1.W3` | Source-of-truth mapping (event/task/artifact/gate tables) | `M1.W2` | Field-level lineage for every formula component | Lineage consistency linter passes |
-| `M1.W4` | Data contract schema for metrics API | `M1.W2`, `M1.W3` | Versioned response schema for summaries, trends, and drill-down | Contract tests generated and passing in mock mode |
-| `M1.W5` | Data quality rulebook (nulls, lag, duplication, outliers) | `M1.W3` | Rules and thresholds defined for each source stream | DQ test suite baseline passes |
-| `M1.W6` | MVP metric scope cut and release criteria | `M1.W1`..`M1.W5` | MVP scope limited to highest-impact metrics only | Scope audit confirms no non-MVP creep |
+| `P5.M1.T4` | Metrics catalogue v1 (north-star + operational + actionability) | None | Prioritized list with business rationale and owners | Checklist validation against stakeholder goals |
+| `P5.M1.T5` | Metric formulas + dimensions spec | `P5.M1.T4` | Every metric has canonical formula, grain, dimensions, and SLA | Formula unit-test stubs generated for each metric |
+| `P5.M1.T6` | Source-of-truth mapping (event/task/artifact/gate tables) | `P5.M1.T5` | Field-level lineage for every formula component | Lineage consistency linter passes |
+| `P5.M1.T7` | Data contract schema for metrics API | `P5.M1.T5`, `P5.M1.T6` | Versioned response schema for summaries, trends, and drill-down | Contract tests generated and passing in mock mode |
+| `P5.M1.T8` | Data quality rulebook (nulls, lag, duplication, outliers) | `P5.M1.T6` | Rules and thresholds defined for each source stream | DQ test suite baseline passes |
+| `P5.M1.T9` | MVP metric scope cut and release criteria | `P5.M1.T4`, `P5.M1.T5`, `P5.M1.T6`, `P5.M1.T7`, `P5.M1.T8` | MVP scope limited to highest-impact metrics only | Scope audit confirms no non-MVP creep |
 
 ### `P5.M1` Exit
 
@@ -105,15 +105,15 @@ Verification:
 
 **Outcome:** Reliable metrics computation layer running from live project data.
 
-| Work Package | Deliverable | Dependencies | Acceptance Criteria | Verification Criteria |
+| Task (short_id) | Deliverable | Dependencies | Acceptance Criteria | Verification Criteria |
 |---|---|---|---|---|
-| `M2.W1` | Metrics read-model schema and storage strategy | `M1.W3`, `M1.W4` | Efficient storage supports summary + trend + drill-down queries | Migration tests and query latency baseline |
-| `M2.W2` | Incremental computation jobs (batch/near-real-time) | `M2.W1` | Jobs update metrics deterministically and idempotently | Replay determinism tests pass |
-| `M2.W3` | Metric formula implementation library | `M1.W2`, `M2.W1` | All MVP formulas implemented with reusable primitives | Unit tests for each formula |
-| `M2.W4` | Golden dataset and reconciliation harness | `M2.W3` | Engine results match golden truth tables | Reconciliation delta == 0 for critical metrics |
-| `M2.W5` | Data quality enforcement pipeline | `M1.W5`, `M2.W2` | Bad/late/duplicate source data flagged and quarantined | DQ gates fail on synthetic corrupt inputs |
-| `M2.W6` | Performance and scalability optimization | `M2.W2`, `M2.W3` | Metrics compute within target SLA under target load | Load/perf tests meet p95 targets |
-| `M2.W7` | Failure recovery and backfill utilities | `M2.W2`, `M2.W5` | Backfills safe, deterministic, resumable | Backfill replay tests and rollback drills |
+| `P5.M2.T1` | Metrics read-model schema and storage strategy | `P5.M1.T6`, `P5.M1.T7` | Efficient storage supports summary + trend + drill-down queries | Migration tests and query latency baseline |
+| `P5.M2.T2` | Incremental computation jobs (batch/near-real-time) | `P5.M2.T1` | Jobs update metrics deterministically and idempotently | Replay determinism tests pass |
+| `P5.M2.T3` | Metric formula implementation library | `P5.M1.T5`, `P5.M2.T1` | All MVP formulas implemented with reusable primitives | Unit tests for each formula |
+| `P5.M2.T4` | Golden dataset and reconciliation harness | `P5.M2.T3` | Engine results match golden truth tables | Reconciliation delta == 0 for critical metrics |
+| `P5.M2.T5` | Data quality enforcement pipeline | `P5.M1.T8`, `P5.M2.T2` | Bad/late/duplicate source data flagged and quarantined | DQ gates fail on synthetic corrupt inputs |
+| `P5.M2.T6` | Performance and scalability optimization | `P5.M2.T2`, `P5.M2.T3` | Metrics compute within target SLA under target load | Load/perf tests meet p95 targets |
+| `P5.M2.T7` | Failure recovery and backfill utilities | `P5.M2.T2`, `P5.M2.T5` | Backfills safe, deterministic, resumable | Backfill replay tests and rollback drills |
 
 ### `P5.M2` Exit
 
@@ -133,15 +133,15 @@ Verification:
 
 **Outcome:** Metrics become operationally useful for planning, triage, and leadership decisions.
 
-| Work Package | Deliverable | Dependencies | Acceptance Criteria | Verification Criteria |
+| Task (short_id) | Deliverable | Dependencies | Acceptance Criteria | Verification Criteria |
 |---|---|---|---|---|
-| `M3.W1` | Metrics REST endpoints (`summary`, `trend`, `breakdown`, `drilldown`) | `M1.W4`, `M2.W3` | Endpoints return contract-compliant data with filters | API contract + integration tests |
-| `M3.W2` | Web metrics dashboard MVP | `M3.W1` | Core dashboard shows north-star + top bottlenecks + trends | UI integration tests + visual regressions |
-| `M3.W3` | Milestone health and forecast panel | `M2.W3`, `M3.W1` | Forecasted risk and SLA breach probabilities visible | Forecast calibration tests |
-| `M3.W4` | Alerting engine (threshold + trend anomaly) | `M2.W5`, `M3.W1` | Actionable alerts generated for real risks with low noise | Precision/recall tests on historical incidents |
-| `M3.W5` | Workflow actions from metrics (routing/batching suggestions) | `M3.W4` | Suggestions provided with confidence and evidence links | Suggestion validity regression tests |
-| `M3.W6` | Role-based views and permission guards | `P3.M3.T3`, `M3.W1` | Planner/reviewer/operator views enforce scope boundaries | Authorization tests |
-| `M3.W7` | MVP rollout package and runbook | `M3.W1`..`M3.W6` | Deployment + rollback playbook complete and tested | Staging smoke and rollback rehearsal |
+| `P5.M3.T1` | Metrics REST endpoints (`summary`, `trend`, `breakdown`, `drilldown`) | `P5.M1.T7`, `P5.M2.T3` | Endpoints return contract-compliant data with filters | API contract + integration tests |
+| `P5.M3.T2` | Web metrics dashboard MVP | `P5.M3.T1` | Core dashboard shows north-star + top bottlenecks + trends | UI integration tests + visual regressions |
+| `P5.M3.T3` | Milestone health and forecast panel | `P5.M2.T3`, `P5.M3.T1` | Forecasted risk and SLA breach probabilities visible | Forecast calibration tests |
+| `P5.M3.T4` | Alerting engine (threshold + trend anomaly) | `P5.M2.T5`, `P5.M3.T1` | Actionable alerts generated for real risks with low noise | Precision/recall tests on historical incidents |
+| `P5.M3.T5` | Workflow actions from metrics (routing/batching suggestions) | `P5.M3.T4` | Suggestions provided with confidence and evidence links | Suggestion validity regression tests |
+| `P5.M3.T6` | Role-based views and permission guards | `P3.M3.T3`, `P5.M3.T1` | Planner/reviewer/operator views enforce scope boundaries | Authorization tests |
+| `P5.M3.T7` | MVP rollout package and runbook | `P5.M3.T1`, `P5.M3.T2`, `P5.M3.T3`, `P5.M3.T4`, `P5.M3.T5`, `P5.M3.T6` | Deployment + rollback playbook complete and tested | Staging smoke and rollback rehearsal |
 
 ### `P5.M3` Exit
 
@@ -164,14 +164,14 @@ Human checkpoint:
 
 **Outcome:** Metrics system is trusted, widely used, and continuously improving.
 
-| Work Package | Deliverable | Dependencies | Acceptance Criteria | Verification Criteria |
+| Task (short_id) | Deliverable | Dependencies | Acceptance Criteria | Verification Criteria |
 |---|---|---|---|---|
-| `M4.W1` | Adoption instrumentation (usage telemetry for dashboards/actions) | `M3.W2`, `M3.W5` | Team usage and decision impact are measurable | Telemetry completeness tests |
-| `M4.W2` | Metric trust scorecard (freshness, accuracy, drift) | `M2.W5`, `M3.W1` | Trust indicators shown alongside metrics | Drift detection and freshness tests |
-| `M4.W3` | Explainability layer for derived scores | `M3.W3`, `M3.W5` | Every composite score explains contribution factors | Explainability consistency tests |
-| `M4.W4` | Cross-project aggregation and benchmarking | `M3.W1`, `M4.W1` | Portfolio comparisons available without data leakage | Multi-project isolation and aggregation tests |
-| `M4.W5` | Continuous tuning loop for thresholds and forecasts | `M3.W4`, `M4.W2` | Thresholds/forecasts improve from feedback loops | A/B evaluation and backtesting |
-| `M4.W6` | Phase 6 backlog generated from measured gaps | `M4.W1`..`M4.W5` | Prioritized backlog backed by metric evidence | Backlog traceability audit |
+| `P5.M4.T1` | Adoption instrumentation (usage telemetry for dashboards/actions) | `P5.M3.T2`, `P5.M3.T5` | Team usage and decision impact are measurable | Telemetry completeness tests |
+| `P5.M4.T2` | Metric trust scorecard (freshness, accuracy, drift) | `P5.M2.T5`, `P5.M3.T1` | Trust indicators shown alongside metrics | Drift detection and freshness tests |
+| `P5.M4.T3` | Explainability layer for derived scores | `P5.M3.T3`, `P5.M3.T5` | Every composite score explains contribution factors | Explainability consistency tests |
+| `P5.M4.T4` | Cross-project aggregation and benchmarking | `P5.M3.T1`, `P5.M4.T1` | Portfolio comparisons available without data leakage | Multi-project isolation and aggregation tests |
+| `P5.M4.T5` | Continuous tuning loop for thresholds and forecasts | `P5.M3.T4`, `P5.M4.T2` | Thresholds/forecasts improve from feedback loops | A/B evaluation and backtesting |
+| `P5.M4.T6` | Phase 6 backlog generated from measured gaps | `P5.M4.T1`, `P5.M4.T2`, `P5.M4.T3`, `P5.M4.T4`, `P5.M4.T5` | Prioritized backlog backed by metric evidence | Backlog traceability audit |
 
 ### `P5.M4` Exit
 
@@ -189,18 +189,18 @@ Verification:
 
 ### 5.1 Critical Path (fastest MVP)
 
-1. `M1.W1 -> M1.W2 -> M1.W4 -> M2.W1 -> M2.W3 -> M2.W4 -> M3.W1 -> M3.W2 -> M3.W4 -> M3.W7`
+1. `P5.M1.T4 -> P5.M1.T5 -> P5.M1.T7 -> P5.M2.T1 -> P5.M2.T3 -> P5.M2.T4 -> P5.M3.T1 -> P5.M3.T2 -> P5.M3.T4 -> P5.M3.T7`
 
 ### 5.2 External Dependencies
 
-1. `P3.M3.T3` must be integrated before `M3.W6`.
-2. `P3.M3.T4` should be integrated before `M3.W1` for observability alignment.
+1. `P3.M3.T3` must be integrated before `P5.M3.T6`.
+2. `P3.M3.T4` should be integrated before `P5.M3.T1` for observability alignment.
 
 ### 5.3 Parallel Lanes
 
-1. Data quality lane: `M1.W5`, `M2.W5`, `M2.W7`.
-2. Forecast/alert lane: `M3.W3`, `M3.W4`, `M3.W5`.
-3. Adoption/trust lane: `M4.W1`, `M4.W2`, `M4.W3`.
+1. Data quality lane: `P5.M1.T8`, `P5.M2.T5`, `P5.M2.T7`.
+2. Forecast/alert lane: `P5.M3.T3`, `P5.M3.T4`, `P5.M3.T5`.
+3. Adoption/trust lane: `P5.M4.T1`, `P5.M4.T2`, `P5.M4.T3`.
 
 ## 6. Verification-First Quality Model (Low Human Intervention)
 
@@ -273,4 +273,3 @@ Phase 5 is done when:
 3. Verification-first pipeline catches data/formula/contract regressions automatically.
 4. Teams can make faster planning decisions using metrics evidence.
 5. Human gating is limited to the single production approval checkpoint.
-
