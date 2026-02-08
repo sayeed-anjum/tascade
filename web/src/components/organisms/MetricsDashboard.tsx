@@ -116,16 +116,22 @@ export default function MetricsDashboard({ projectId }: MetricsDashboardProps) {
                 title="Integration Reliability Score"
                 value={ns.integration_reliability_score.value}
                 trend={
-                  ns.integration_reliability_score.success_rate >= 0.95
-                    ? 'up'
-                    : ns.integration_reliability_score.success_rate >= 0.8
-                      ? 'stable'
-                      : 'down'
+                  ns.integration_reliability_score.value === 0
+                    ? 'stable'
+                    : ns.integration_reliability_score.success_rate >= 0.95
+                      ? 'up'
+                      : ns.integration_reliability_score.success_rate >= 0.8
+                        ? 'stable'
+                        : 'down'
                 }
                 changePct={
-                  (ns.integration_reliability_score.success_rate - 0.9) * 100
+                  ns.integration_reliability_score.value === 0
+                    ? 0
+                    : (ns.integration_reliability_score.success_rate - 0.9) * 100
                 }
-                format={(v) => `${v.toFixed(0)}%`}
+                format={(v) =>
+                  v === 0 ? 'N/A' : `${v.toFixed(0)}%`
+                }
                 thresholds={[60, 85]}
               />
             </>
