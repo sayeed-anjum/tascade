@@ -553,3 +553,30 @@ class MetricsDrilldownResponse(BaseModel):
     items: list[DrilldownItemSchema]
     pagination: PaginationSchema
     aggregation: AggregationSchema
+
+
+# ---------------------------------------------------------------------------
+# Milestone Health & Forecast Schemas (P5.M3.T3)
+# ---------------------------------------------------------------------------
+
+
+class MilestoneTaskSummary(BaseModel):
+    total: int
+    completed: int
+    remaining: int
+    avg_cycle_time_hours: float
+
+
+class MilestoneHealthItem(BaseModel):
+    milestone_id: str
+    name: str
+    health_score: float | None = None
+    health_status: str
+    breach_probability: float
+    task_summary: MilestoneTaskSummary
+
+
+class MetricsHealthResponse(BaseModel):
+    version: str = "1.0"
+    project_id: str
+    milestones: list[MilestoneHealthItem]
