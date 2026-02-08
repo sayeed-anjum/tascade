@@ -2055,6 +2055,113 @@ class SqlStore:
         }
 
 
+    # ------------------------------------------------------------------
+    # Milestone Health & Forecast (P5.M3.T3)
+    # ------------------------------------------------------------------
+
+    def get_milestone_health(self, project_id: str) -> list[dict[str, Any]]:
+        """Compute health and breach probability per milestone.
+
+        Returns a list of dicts with keys: milestone_id, milestone_name,
+        health_score, health_status, breach_probability, remaining_tasks,
+        total_tasks, avg_cycle_time_hours.
+        """
+        from app.metrics.forecast import breach_probability as _breach_prob, milestone_health_score
+
+        with SessionLocal() as session:
+            milestones = session.execute(
+                select(MilestoneModel).where(MilestoneModel.project_id == project_id)
+                .order_by(MilestoneModel.sequence)
+            ).scalars().all()
+
+            if not milestones:
+                return []
+
+            milestone_ids = [ms.id for ms in milestones]
+
+            tasks = session.execute(
+                select(TaskModel).where(
+                    TaskModel.project_id == project_id,
+                    TaskModel.milestone_id.in_(milestone_ids),
+                )
+            ).scalars().all()
+
+            tasks_by_milestone: dict[str, list[TaskModel]] = {}
+            for task in tasks:
+                if task.milestone_id:
+                    tasks_by_milestone.setdefault(task.milestone_id, []).append(task)
+
+            completed_states = {TaskState.INTEGRATED, TaskState.CANCELLED, TaskState.ABANDONED}
+            results: list[dict[str, Any]] = []
+
+            for ms in milestones:
+                ms_tasks = tasks_by_milestone.get(ms.id, [])
+                total = len(ms_tasks)
+                completed = sum(1 for t in ms_tasks if t.state in completed_states)
+                remaining = total - completed
+
+                # Compute cycle times from completed tasks
+                cycle_times: list[float] = []
+                for t in ms_tasks:
+                    if t.state in completed_states and t.created_at and t.updated_at:
+                        created = t.created_at
+                        updated = t.updated_at
+                        if created.tzinfo is None:
+                            created = created.replace(tzinfo=__import__("datetime").timezone.utc)
+                        if updated.tzinfo is None:
+                            updated = updated.replace(tzinfo=__import__("datetime").timezone.utc)
+                        ct_hours = max((updated - created).total_seconds() / 3600, 0.0)
+                        cycle_times.append(ct_hours)
+
+                avg_cycle = sum(cycle_times) / len(cycle_times) if cycle_times else 24.0
+                stddev = 0.0
+                if len(cycle_times) > 1:
+                    mean_ct = avg_cycle
+                    variance = sum((ct - mean_ct) ** 2 for ct in cycle_times) / len(cycle_times)
+                    stddev = variance ** 0.5
+                elif cycle_times:
+                    stddev = avg_cycle * 0.3
+                else:
+                    stddev = avg_cycle * 0.3
+
+                # Health score: ratio-based using completion fraction
+                if total > 0:
+                    ratio = completed / total
+                    health = milestone_health_score(ratio, ratio, ratio, ratio)
+                else:
+                    health = None
+
+                # Health status thresholds
+                if health is not None:
+                    if health >= 0.70:
+                        status = "green"
+                    elif health >= 0.50:
+                        status = "yellow"
+                    else:
+                        status = "red"
+                else:
+                    status = "red"
+
+                # Breach probability: estimate with 168h (1 week) default window
+                bp = 0.0
+                if remaining > 0:
+                    deadline_hours = 168.0  # default 1-week horizon
+                    bp = _breach_prob(remaining, avg_cycle, deadline_hours, stddev)
+
+                results.append({
+                    "milestone_id": ms.id,
+                    "milestone_name": ms.name,
+                    "health_score": health,
+                    "health_status": status,
+                    "breach_probability": round(bp, 4),
+                    "remaining_tasks": remaining,
+                    "total_tasks": total,
+                    "avg_cycle_time_hours": round(avg_cycle, 2),
+                })
+
+            return results
+
+
 def _alert_to_dict(model: MetricsAlertModel) -> dict[str, Any]:
     return {
         "id": model.id,

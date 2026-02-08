@@ -41,8 +41,11 @@ from app.schemas import (
     MetricsAlertSchema,
     MetricsBreakdownResponse,
     MetricsDrilldownResponse,
+    MetricsHealthResponse,
     MetricsSummaryResponse,
     MetricsTrendsResponse,
+    MilestoneHealthItem,
+    MilestoneTaskSummary,
     PlanChangeset,
     PlanVersion,
     Project,
@@ -1087,6 +1090,47 @@ def get_workflow_actions(
     return WorkflowActionsResponse(
         project_id=project_id,
         suggestions=[WorkflowSuggestion(**s) for s in suggestions],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Milestone Health & Forecast (P5.M3.T3)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/v1/metrics/health", response_model=MetricsHealthResponse)
+def get_metrics_health(
+    response: Response,
+    project_id: str = Query(...),
+) -> MetricsHealthResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    rows = STORE.get_milestone_health(project_id)
+    response.headers["X-API-Version"] = _API_VERSION_HEADER
+    milestones = [
+        MilestoneHealthItem(
+            milestone_id=row["milestone_id"],
+            name=row["milestone_name"],
+            health_score=row["health_score"],
+            health_status=row["health_status"],
+            breach_probability=row["breach_probability"],
+            task_summary=MilestoneTaskSummary(
+                total=row["total_tasks"],
+                completed=row["total_tasks"] - row["remaining_tasks"],
+                remaining=row["remaining_tasks"],
+                avg_cycle_time_hours=row["avg_cycle_time_hours"],
+            ),
+        )
+        for row in rows
+    ]
+    return MetricsHealthResponse(
+        project_id=project_id,
+        milestones=milestones,
     )
 
 
