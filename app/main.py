@@ -1,6 +1,7 @@
 import pathlib
+import uuid
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -44,7 +45,13 @@ from app.schemas import (
     TaskReservation,
     TaskSummary,
     UpdateIntegrationAttemptRequest,
+    ApiKeyInfo,
+    CreateApiKeyRequest,
+    CreateApiKeyResponse,
+    ListApiKeysResponse,
+    RevokeApiKeyResponse,
 )
+from app.auth import AuthContext, get_auth_context, hash_api_key, require_role, VALID_ROLES
 from app.store import STORE
 
 
@@ -64,19 +71,24 @@ def health() -> dict[str, str]:
 
 
 @app.post("/v1/projects", response_model=Project, status_code=status.HTTP_201_CREATED)
-def create_project(payload: CreateProjectRequest) -> Project:
+def create_project(payload: CreateProjectRequest, auth: AuthContext = Depends(get_auth_context)) -> Project:
+    require_role("create_project", auth)
     project = STORE.create_project(payload.name)
     return Project(**project)
 
 
 @app.get("/v1/projects", response_model=ListProjectsResponse)
-def list_projects() -> ListProjectsResponse:
+def list_projects(auth: AuthContext = Depends(get_auth_context)) -> ListProjectsResponse:
+    require_role("list_projects", auth)
     items = STORE.list_projects()
+    if auth.project_id != "*":
+        items = [item for item in items if item["id"] == auth.project_id]
     return ListProjectsResponse(items=[Project(**item) for item in items])
 
 
 @app.get("/v1/projects/{project_id}", response_model=Project)
-def get_project(project_id: str) -> Project:
+def get_project(project_id: str, auth: AuthContext = Depends(get_auth_context)) -> Project:
+    require_role("get_project", auth, target_project_id=project_id)
     project = STORE.get_project(project_id)
     if project is None:
         raise HTTPException(
@@ -89,7 +101,8 @@ def get_project(project_id: str) -> Project:
 
 
 @app.get("/v1/projects/{project_id}/graph", response_model=ProjectGraphResponse)
-def get_project_graph(project_id: str, include_completed: bool = True) -> ProjectGraphResponse:
+def get_project_graph(project_id: str, include_completed: bool = True, auth: AuthContext = Depends(get_auth_context)) -> ProjectGraphResponse:
+    require_role("get_project_graph", auth, target_project_id=project_id)
     try:
         graph = STORE.get_project_graph(project_id=project_id, include_completed=include_completed)
     except KeyError:
@@ -103,7 +116,8 @@ def get_project_graph(project_id: str, include_completed: bool = True) -> Projec
 
 
 @app.post("/v1/gate-rules", response_model=GateRule, status_code=status.HTTP_201_CREATED)
-def create_gate_rule(payload: CreateGateRuleRequest) -> GateRule:
+def create_gate_rule(payload: CreateGateRuleRequest, auth: AuthContext = Depends(get_auth_context)) -> GateRule:
+    require_role("create_gate_rule", auth, target_project_id=payload.project_id)
     if not STORE.project_exists(payload.project_id):
         raise HTTPException(
             status_code=404,
@@ -116,7 +130,8 @@ def create_gate_rule(payload: CreateGateRuleRequest) -> GateRule:
 
 
 @app.post("/v1/gate-decisions", response_model=GateDecision, status_code=status.HTTP_201_CREATED)
-def create_gate_decision(payload: CreateGateDecisionRequest) -> GateDecision:
+def create_gate_decision(payload: CreateGateDecisionRequest, auth: AuthContext = Depends(get_auth_context)) -> GateDecision:
+    require_role("create_gate_decision", auth, target_project_id=payload.project_id)
     if not STORE.project_exists(payload.project_id):
         raise HTTPException(
             status_code=404,
@@ -158,7 +173,9 @@ def list_gate_decisions(
     project_id: str,
     task_id: str | None = None,
     phase_id: str | None = None,
+    auth: AuthContext = Depends(get_auth_context),
 ) -> ListGateDecisionsResponse:
+    require_role("list_gate_decisions", auth, target_project_id=project_id)
     if not STORE.project_exists(project_id):
         raise HTTPException(
             status_code=404,
@@ -178,7 +195,9 @@ def list_gate_checkpoints(
     milestone_id: str | None = None,
     limit: int = 50,
     offset: int = 0,
+    auth: AuthContext = Depends(get_auth_context),
 ) -> ListGateCheckpointsResponse:
+    require_role("list_gate_checkpoints", auth, target_project_id=project_id)
     if not STORE.project_exists(project_id):
         raise HTTPException(
             status_code=404,
@@ -205,7 +224,8 @@ def list_gate_checkpoints(
 
 
 @app.post("/v1/tasks", response_model=Task, status_code=status.HTTP_201_CREATED)
-def create_task(payload: CreateTaskRequest) -> Task:
+def create_task(payload: CreateTaskRequest, auth: AuthContext = Depends(get_auth_context)) -> Task:
+    require_role("create_task", auth, target_project_id=payload.project_id)
     if not STORE.project_exists(payload.project_id):
         raise HTTPException(
             status_code=404,
@@ -254,7 +274,8 @@ def create_task(payload: CreateTaskRequest) -> Task:
 
 
 @app.post("/v1/dependencies", response_model=DependencyEdge, status_code=status.HTTP_201_CREATED)
-def create_dependency(payload: CreateDependencyRequest) -> DependencyEdge:
+def create_dependency(payload: CreateDependencyRequest, auth: AuthContext = Depends(get_auth_context)) -> DependencyEdge:
+    require_role("create_dependency", auth, target_project_id=payload.project_id)
     if payload.from_task_id == payload.to_task_id:
         raise HTTPException(
             status_code=409,
@@ -309,7 +330,8 @@ def create_dependency(payload: CreateDependencyRequest) -> DependencyEdge:
 
 
 @app.get("/v1/tasks/ready", response_model=GetReadyTasksResponse)
-def get_ready_tasks(project_id: str, agent_id: str, capabilities: str = "") -> GetReadyTasksResponse:
+def get_ready_tasks(project_id: str, agent_id: str, capabilities: str = "", auth: AuthContext = Depends(get_auth_context)) -> GetReadyTasksResponse:
+    require_role("get_ready_tasks", auth, target_project_id=project_id)
     if not STORE.project_exists(project_id):
         raise HTTPException(
             status_code=404,
@@ -334,7 +356,9 @@ def list_tasks(
     capability: str | None = None,
     limit: int = 50,
     offset: int = 0,
+    auth: AuthContext = Depends(get_auth_context),
 ) -> ListTasksResponse:
+    require_role("list_tasks", auth, target_project_id=project_id)
     if not STORE.project_exists(project_id):
         raise HTTPException(
             status_code=404,
@@ -377,7 +401,7 @@ def list_tasks(
 
 
 @app.get("/v1/tasks/{task_id}", response_model=Task)
-def get_task(task_id: str) -> Task:
+def get_task(task_id: str, auth: AuthContext = Depends(get_auth_context)) -> Task:
     try:
         task = STORE.get_task(task_id)
     except ValueError as exc:
@@ -395,11 +419,13 @@ def get_task(task_id: str) -> Task:
                 error={"code": "TASK_NOT_FOUND", "message": "Task not found", "retryable": False}
             ).model_dump(),
         )
+    require_role("get_task", auth, target_project_id=task["project_id"])
     return Task(**task)
 
 
 @app.post("/v1/tasks/{task_id}/artifacts", response_model=Artifact, status_code=status.HTTP_201_CREATED)
-def create_task_artifact(task_id: str, payload: CreateArtifactRequest) -> Artifact:
+def create_task_artifact(task_id: str, payload: CreateArtifactRequest, auth: AuthContext = Depends(get_auth_context)) -> Artifact:
+    require_role("create_task_artifact", auth, target_project_id=payload.project_id)
     if not STORE.project_exists(payload.project_id):
         raise HTTPException(
             status_code=404,
@@ -452,7 +478,8 @@ def create_task_artifact(task_id: str, payload: CreateArtifactRequest) -> Artifa
 
 
 @app.get("/v1/tasks/{task_id}/artifacts", response_model=ListArtifactsResponse)
-def list_task_artifacts(task_id: str, project_id: str) -> ListArtifactsResponse:
+def list_task_artifacts(task_id: str, project_id: str, auth: AuthContext = Depends(get_auth_context)) -> ListArtifactsResponse:
+    require_role("list_task_artifacts", auth, target_project_id=project_id)
     if not STORE.project_exists(project_id):
         raise HTTPException(
             status_code=404,
@@ -492,7 +519,8 @@ def list_task_artifacts(task_id: str, project_id: str) -> ListArtifactsResponse:
     response_model=IntegrationAttempt,
     status_code=status.HTTP_201_CREATED,
 )
-def enqueue_integration_attempt(task_id: str, payload: EnqueueIntegrationAttemptRequest) -> IntegrationAttempt:
+def enqueue_integration_attempt(task_id: str, payload: EnqueueIntegrationAttemptRequest, auth: AuthContext = Depends(get_auth_context)) -> IntegrationAttempt:
+    require_role("enqueue_integration_attempt", auth, target_project_id=payload.project_id)
     if not STORE.project_exists(payload.project_id):
         raise HTTPException(
             status_code=404,
@@ -536,7 +564,8 @@ def enqueue_integration_attempt(task_id: str, payload: EnqueueIntegrationAttempt
 
 
 @app.get("/v1/tasks/{task_id}/integration-attempts", response_model=ListIntegrationAttemptsResponse)
-def list_integration_attempts(task_id: str, project_id: str) -> ListIntegrationAttemptsResponse:
+def list_integration_attempts(task_id: str, project_id: str, auth: AuthContext = Depends(get_auth_context)) -> ListIntegrationAttemptsResponse:
+    require_role("list_integration_attempts", auth, target_project_id=project_id)
     if not STORE.project_exists(project_id):
         raise HTTPException(
             status_code=404,
@@ -573,8 +602,9 @@ def list_integration_attempts(task_id: str, project_id: str) -> ListIntegrationA
 
 @app.post("/v1/integration-attempts/{attempt_id}/result", response_model=IntegrationAttempt)
 def update_integration_attempt_result(
-    attempt_id: str, payload: UpdateIntegrationAttemptRequest
+    attempt_id: str, payload: UpdateIntegrationAttemptRequest, auth: AuthContext = Depends(get_auth_context)
 ) -> IntegrationAttempt:
+    require_role("update_integration_attempt_result", auth, target_project_id=payload.project_id)
     if not STORE.project_exists(payload.project_id):
         raise HTTPException(
             status_code=404,
@@ -627,7 +657,8 @@ def update_integration_attempt_result(
 
 
 @app.post("/v1/tasks/{task_id}/claim", response_model=ClaimTaskResponse)
-def claim_task(task_id: str, payload: ClaimTaskRequest) -> ClaimTaskResponse:
+def claim_task(task_id: str, payload: ClaimTaskRequest, auth: AuthContext = Depends(get_auth_context)) -> ClaimTaskResponse:
+    require_role("claim_task", auth, target_project_id=payload.project_id)
     if payload.seen_plan_version is not None:
         current = STORE.current_plan_version_number(payload.project_id)
         if payload.seen_plan_version < current:
@@ -672,7 +703,8 @@ def claim_task(task_id: str, payload: ClaimTaskRequest) -> ClaimTaskResponse:
 
 
 @app.post("/v1/tasks/{task_id}/heartbeat", response_model=HeartbeatResponse)
-def heartbeat_task(task_id: str, payload: HeartbeatRequest) -> HeartbeatResponse:
+def heartbeat_task(task_id: str, payload: HeartbeatRequest, auth: AuthContext = Depends(get_auth_context)) -> HeartbeatResponse:
+    require_role("heartbeat_task", auth, target_project_id=payload.project_id)
     current = STORE.current_plan_version_number(payload.project_id)
     if payload.seen_plan_version is not None and payload.seen_plan_version < current:
         raise HTTPException(
@@ -704,7 +736,8 @@ def heartbeat_task(task_id: str, payload: HeartbeatRequest) -> HeartbeatResponse
 
 
 @app.post("/v1/tasks/{task_id}/assign", response_model=TaskReservation)
-def assign_task(task_id: str, payload: AssignTaskRequest) -> TaskReservation:
+def assign_task(task_id: str, payload: AssignTaskRequest, auth: AuthContext = Depends(get_auth_context)) -> TaskReservation:
+    require_role("assign_task", auth, target_project_id=payload.project_id)
     try:
         reservation = STORE.assign_task(
             task_id=task_id,
@@ -731,7 +764,8 @@ def assign_task(task_id: str, payload: AssignTaskRequest) -> TaskReservation:
 
 
 @app.post("/v1/tasks/{task_id}/state", response_model=TaskStateTransitionResponse)
-def transition_task_state(task_id: str, payload: TaskStateTransitionRequest) -> TaskStateTransitionResponse:
+def transition_task_state(task_id: str, payload: TaskStateTransitionRequest, auth: AuthContext = Depends(get_auth_context)) -> TaskStateTransitionResponse:
+    require_role("transition_task_state", auth, target_project_id=payload.project_id)
     try:
         task = STORE.transition_task_state(
             task_id=task_id,
@@ -771,7 +805,8 @@ def transition_task_state(task_id: str, payload: TaskStateTransitionRequest) -> 
 
 
 @app.post("/v1/plans/changesets", response_model=PlanChangeset, status_code=status.HTTP_201_CREATED)
-def create_plan_changeset(payload: CreatePlanChangesetRequest) -> PlanChangeset:
+def create_plan_changeset(payload: CreatePlanChangesetRequest, auth: AuthContext = Depends(get_auth_context)) -> PlanChangeset:
+    require_role("create_plan_changeset", auth, target_project_id=payload.project_id)
     if not STORE.project_exists(payload.project_id):
         raise HTTPException(
             status_code=404,
@@ -784,7 +819,8 @@ def create_plan_changeset(payload: CreatePlanChangesetRequest) -> PlanChangeset:
 
 
 @app.post("/v1/plans/changesets/{changeset_id}/apply", response_model=ApplyPlanChangesetResponse)
-def apply_plan_changeset(changeset_id: str, payload: ApplyPlanChangesetRequest | None = None) -> ApplyPlanChangesetResponse:
+def apply_plan_changeset(changeset_id: str, payload: ApplyPlanChangesetRequest | None = None, auth: AuthContext = Depends(get_auth_context)) -> ApplyPlanChangesetResponse:
+    require_role("apply_plan_changeset", auth)
     allow_rebase = payload.allow_rebase if payload is not None else False
     try:
         changeset, plan_version, invalid_claims, invalid_reservations = STORE.apply_plan_changeset(
@@ -812,6 +848,92 @@ def apply_plan_changeset(changeset_id: str, payload: ApplyPlanChangesetRequest |
         plan_version=PlanVersion(**plan_version),
         invalidated_claim_task_ids=invalid_claims,
         invalidated_reservation_task_ids=invalid_reservations,
+    )
+
+
+# ---------------------------------------------------------------------------
+# API Key management
+# ---------------------------------------------------------------------------
+
+
+@app.post("/v1/api-keys", response_model=CreateApiKeyResponse, status_code=status.HTTP_201_CREATED)
+def create_api_key(
+    payload: CreateApiKeyRequest, auth: AuthContext = Depends(get_auth_context)
+) -> CreateApiKeyResponse:
+    require_role("create_api_key", auth, target_project_id=payload.project_id)
+    invalid_roles = set(payload.role_scopes) - VALID_ROLES
+    if invalid_roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ErrorResponse(
+                error={
+                    "code": "INVALID_ROLES",
+                    "message": f"Invalid role scopes: {sorted(invalid_roles)}",
+                    "retryable": False,
+                }
+            ).model_dump(),
+        )
+    raw_key = f"tsk_{uuid.uuid4().hex}"
+    key_hash = hash_api_key(raw_key)
+    record = STORE.create_api_key(
+        project_id=payload.project_id,
+        name=payload.name,
+        role_scopes=payload.role_scopes,
+        created_by=payload.created_by,
+        key_hash=key_hash,
+    )
+    return CreateApiKeyResponse(
+        id=record["id"],
+        project_id=record["project_id"],
+        name=record["name"],
+        role_scopes=record["role_scopes"],
+        raw_key=raw_key,
+        created_at=record["created_at"],
+    )
+
+
+@app.get("/v1/api-keys", response_model=ListApiKeysResponse)
+def list_api_keys(
+    project_id: str, auth: AuthContext = Depends(get_auth_context)
+) -> ListApiKeysResponse:
+    require_role("list_api_keys", auth, target_project_id=project_id)
+    keys = STORE.list_api_keys(project_id)
+    return ListApiKeysResponse(items=[ApiKeyInfo(**k) for k in keys])
+
+
+@app.post("/v1/api-keys/{key_id}/revoke", response_model=RevokeApiKeyResponse)
+def revoke_api_key(
+    key_id: str, project_id: str, auth: AuthContext = Depends(get_auth_context)
+) -> RevokeApiKeyResponse:
+    require_role("revoke_api_key", auth, target_project_id=project_id)
+    try:
+        record = STORE.revoke_api_key(key_id, project_id)
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=ErrorResponse(
+                error={"code": "API_KEY_NOT_FOUND", "message": "API key not found", "retryable": False}
+            ).model_dump(),
+        )
+    except ValueError as exc:
+        msg = str(exc)
+        if "PROJECT_MISMATCH" in msg:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=ErrorResponse(
+                    error={"code": "PROJECT_MISMATCH", "message": "Key does not belong to this project", "retryable": False}
+                ).model_dump(),
+            )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=ErrorResponse(
+                error={"code": "ALREADY_REVOKED", "message": "API key is already revoked", "retryable": False}
+            ).model_dump(),
+        )
+    return RevokeApiKeyResponse(
+        id=record["id"],
+        status=record["status"],
+        revoked_at=record["revoked_at"],
     )
 
 

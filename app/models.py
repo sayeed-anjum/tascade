@@ -103,6 +103,11 @@ class GateDecisionOutcome(str, Enum):
     APPROVED_WITH_RISK = "approved_with_risk"
 
 
+class ApiKeyStatus(str, Enum):
+    ACTIVE = "active"
+    REVOKED = "revoked"
+
+
 UUID_TEXT = Uuid(as_uuid=False)
 TEXT_LIST = JSON().with_variant(ARRAY(Text), "postgresql")
 JSON_LIST = JSON().with_variant(JSONB, "postgresql")
@@ -431,3 +436,24 @@ class EventLogModel(Base):
     caused_by: Mapped[str | None] = mapped_column(Text, nullable=True)
     correlation_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+
+class ApiKeyModel(Base):
+    __tablename__ = "api_key"
+
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    role_scopes: Mapped[list[str]] = mapped_column(TEXT_LIST, nullable=False, default=list)
+    status: Mapped[ApiKeyStatus] = mapped_column(
+        SAEnum(ApiKeyStatus, values_callable=_enum_values),
+        nullable=False,
+        default=ApiKeyStatus.ACTIVE,
+    )
+    created_by: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
