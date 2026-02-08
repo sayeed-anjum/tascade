@@ -1,5 +1,8 @@
 # Phase 5 - Project Metrics WBS and MVP Delivery Plan
 
+> Historical dated document.
+> Treat scope and sequencing in this file as point-in-time planning context; verify current implementation in code/tests.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Build an impactful, end-to-end project-management metrics system that improves planning accuracy, delivery predictability, risk visibility, and operational decision speed with minimal manual gating.

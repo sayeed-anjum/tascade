@@ -1,5 +1,8 @@
 # Web UI Implementation Plan v0.2 (P4 Baseline)
 
+> Historical dated document.
+> Treat scope and sequencing in this file as point-in-time planning context; verify current implementation in code/tests.
+
 Date: 2026-02-07
 Program: `P4 - Phase 4 - Web UI Product Surface`
 Task Anchor: `P4.M1.T1`

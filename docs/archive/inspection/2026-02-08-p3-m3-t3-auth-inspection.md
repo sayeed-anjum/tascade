@@ -1,5 +1,8 @@
 # Inspection Report: P3.M3.T3 API Key Auth and Role Scopes
 
+> Historical dated document.
+> Treat findings and status in this file as point-in-time and verify against current code/tests before acting.
+
 - Date: 2026-02-08
 - Inspected task: `P3.M3.T3` (`dea90bdc-8c35-4743-999e-68ba6da8527a`)
 - Inspected branch/commit: `p3-m3-t3-api-key-auth` @ `5f4363a`

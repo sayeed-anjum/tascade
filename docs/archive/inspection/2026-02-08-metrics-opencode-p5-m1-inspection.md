@@ -1,5 +1,8 @@
 # Inspection Report: `metrics-opencode` vs `P5.M1` Requirements
 
+> Historical dated document.
+> Treat findings and status in this file as point-in-time and verify against current code/tests before acting.
+
 - **Date:** 2026-02-08
 - **Inspector:** Codex (updated with comparative assimilation from alternate review)
 - **Branch Reviewed:** `metrics-opencode`

@@ -4,6 +4,10 @@ Product: Agentic Task Orchestration System (working name: Tascade)
 Date: 2026-02-06
 Status: Draft
 
+> Historical baseline document.
+> Any implementation status bullets in this file are point-in-time notes (2026-02-07 addendum), not current project state.
+> Current truth for shipped behavior is code + tests.
+
 ## 0. Status Sync Addendum (2026-02-07)
 
 This PRD remains the product baseline; implementation status has advanced materially since initial drafting.

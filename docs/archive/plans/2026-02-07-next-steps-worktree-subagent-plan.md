@@ -1,5 +1,8 @@
 # Next-Step Hardening Bundle Implementation Plan
 
+> Historical dated document.
+> Treat scope and sequencing in this file as point-in-time planning context; verify current implementation in code/tests.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Deliver four hardening items: review-evidence enforcement, short-id read lookup, implemented-task readiness report, and one subagent worktree trial.

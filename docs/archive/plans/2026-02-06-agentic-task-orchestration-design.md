@@ -1,5 +1,8 @@
 # Agentic Task Orchestration Design (v0.1)
 
+> Historical dated document.
+> Treat scope and sequencing in this file as point-in-time design context; verify current implementation in code/tests.
+
 Date: 2026-02-06
 Status: Draft (validated via brainstorming session)
 

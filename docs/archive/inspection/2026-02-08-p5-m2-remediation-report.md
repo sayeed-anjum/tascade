@@ -1,5 +1,8 @@
 # P5.M2 Metrics-Opencode Follow-up Inspection Report
 
+> Historical dated document.
+> Treat findings and status in this file as point-in-time and verify against current code/tests before acting.
+
 - Date: 2026-02-08
 - Scope: Validation of remediation for `metrics-opencode` at commit `7686beb`.
 - Reference: Addresses findings from `docs/inspection/2026-02-08-p5-m2-metrics-opencode-inspection.md`.

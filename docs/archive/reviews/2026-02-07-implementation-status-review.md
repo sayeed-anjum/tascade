@@ -1,5 +1,8 @@
 # Tascade Implementation Status Review (2026-02-07)
 
+> Historical snapshot: this report reflects repository/task status as of **2026-02-07** only.
+> For current status, treat code and test results as source of truth.
+
 ## Purpose
 
 Sync implementation reality against:

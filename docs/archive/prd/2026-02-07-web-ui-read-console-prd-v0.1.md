@@ -1,5 +1,9 @@
 # Web UI Product Requirements Document (PRD) v0.2
 
+> Historical baseline document.
+> Any implementation status/scope notes in this file are point-in-time planning context.
+> Current truth for shipped behavior is code + tests.
+
 Product: Tascade Web UI (Read-First Operations Console)
 Date: 2026-02-07
 Status: Draft

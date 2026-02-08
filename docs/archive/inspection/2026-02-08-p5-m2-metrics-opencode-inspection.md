@@ -1,5 +1,8 @@
 # P5.M2 Metrics-Opencode Inspection Report
 
+> Historical dated document.
+> Treat findings and status in this file as point-in-time and verify against current code/tests before acting.
+
 - Date: 2026-02-08
 - Scope: Validate `P5.M2.T1`..`P5.M2.T7` implementation status on `metrics-opencode` at commit `c0ea7665918f22606439c92c1c0b3f8f2681dfdd`
 - Inspector task: `P5.M2.T8`

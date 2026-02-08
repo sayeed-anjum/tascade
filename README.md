@@ -22,6 +22,8 @@ uvicorn app.main:app --reload --port 8010
 
 See **[docs/RUNBOOK.md](docs/RUNBOOK.md)** for a comprehensive usage guide covering
 installation, development workflows, deployment, and the web dashboard.
+See **[docs/README.md](docs/README.md)** for the canonical documentation index
+and archive policy.
 
 ```bash
 # Quick-start: build the web UI and serve everything on port 8010

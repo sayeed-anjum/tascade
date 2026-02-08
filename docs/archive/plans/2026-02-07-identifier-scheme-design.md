@@ -1,5 +1,8 @@
 # Tascade Identifier Scheme Design
 
+> Historical dated document.
+> Treat scope and sequencing in this file as point-in-time planning context; verify current implementation in code/tests.
+
 Date: 2026-02-07
 Status: Proposed
 Scope: Human-readable short IDs for project planning and execution entities (without replacing UUID PKs)

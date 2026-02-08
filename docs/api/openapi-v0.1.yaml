@@ -1,59 +1,286 @@
 openapi: 3.1.0
 info:
-  title: Tascade API
+  title: Tascade
   version: 0.1.0
-  description: |
-    Canonical REST/JSON API for the Tascade coordinator.
-
-    Design constraints:
-    - Single source of truth for task/dependency/gate invariants.
-    - MCP adapter is a thin proxy over these endpoints.
-    - Idempotency required for mutating operations.
-    - Project-scoped API keys required for all operations.
-servers:
-  - url: http://localhost:8080
-security:
-  - ApiKeyAuth: []
-tags:
-  - name: Projects
-  - name: Tasks
-  - name: Dependencies
-  - name: Planning
-  - name: Integration
-  - name: Gates
-  - name: Views
-
 paths:
+  /health:
+    get:
+      summary: Health
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Health Health Get
   /v1/projects:
+    get:
+      summary: List Projects
+      operationId: list_projects_v1_projects_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListProjectsResponse'
+      security:
+      - HTTPBearer: []
     post:
-      tags: [Projects]
-      summary: Create project
-      operationId: createProject
+      summary: Create Project
+      operationId: create_project_v1_projects_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /v1/projects/{project_id}:
+    get:
+      summary: Get Project
+      operationId: get_project_v1_projects__project_id__get
+      security:
+      - HTTPBearer: []
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/projects/{project_id}/graph:
+    get:
+      summary: Get Project Graph
+      operationId: get_project_graph_v1_projects__project_id__graph_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      - name: include_completed
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: true
+          title: Include Completed
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectGraphResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/gate-rules:
+    post:
+      summary: Create Gate Rule
+      operationId: create_gate_rule_v1_gate_rules_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGateRuleRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GateRule'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /v1/gate-decisions:
+    post:
+      summary: Create Gate Decision
+      operationId: create_gate_decision_v1_gate_decisions_post
+      security:
+      - HTTPBearer: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateProjectRequest'
+              $ref: '#/components/schemas/CreateGateDecisionRequest'
       responses:
         '201':
-          description: Created
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Project'
-        default:
-          $ref: '#/components/responses/Error'
-
+                $ref: '#/components/schemas/GateDecision'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      summary: List Gate Decisions
+      operationId: list_gate_decisions_v1_gate_decisions_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      - name: task_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task Id
+      - name: phase_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phase Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListGateDecisionsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/gates/checkpoints:
+    get:
+      summary: List Gate Checkpoints
+      operationId: list_gate_checkpoints_v1_gates_checkpoints_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      - name: gate_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Gate Type
+      - name: phase_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phase Id
+      - name: milestone_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Milestone Id
+      - name: include_completed
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Include Completed
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListGateCheckpointsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /v1/tasks:
     post:
-      tags: [Tasks]
-      summary: Create task
-      operationId: createTask
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
+      summary: Create Task
+      operationId: create_task_v1_tasks_post
+      security:
+      - HTTPBearer: []
       requestBody:
         required: true
         content:
@@ -62,233 +289,183 @@ paths:
               $ref: '#/components/schemas/CreateTaskRequest'
       responses:
         '201':
-          description: Created
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Task'
-        default:
-          $ref: '#/components/responses/Error'
-
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      summary: List Tasks
+      operationId: list_tasks_v1_tasks_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      - name: state
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: State
+      - name: phase_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phase Id
+      - name: capability
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Capability
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListTasksResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /v1/dependencies:
     post:
-      tags: [Dependencies]
-      summary: Create dependency edge
-      operationId: createDependency
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
+      summary: Create Dependency
+      operationId: create_dependency_v1_dependencies_post
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateDependencyRequest'
+        required: true
       responses:
         '201':
-          description: Created
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DependencyEdge'
-        '409':
-          description: Conflict (e.g., cycle detected)
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        default:
-          $ref: '#/components/responses/Error'
-
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /v1/tasks/ready:
     get:
-      tags: [Tasks]
-      summary: Get pull-eligible tasks ranked for an agent
-      operationId: getReadyTasks
+      summary: Get Ready Tasks
+      operationId: get_ready_tasks_v1_tasks_ready_get
+      security:
+      - HTTPBearer: []
       parameters:
-        - $ref: '#/components/parameters/ProjectIdQuery'
-        - name: capabilities
-          in: query
-          description: Comma-separated capability tags for filtering/ranking.
-          required: false
-          schema:
-            type: string
-          example: frontend,crud
-        - name: agent_id
-          in: query
-          description: Agent identity for assignee-visible reserved tasks.
-          required: true
-          schema:
-            type: string
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 50
+      - name: project_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      - name: agent_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Agent Id
+      - name: capabilities
+        in: query
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Capabilities
       responses:
         '200':
-          description: Ranked task list
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/GetReadyTasksResponse'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/tasks/{taskId}:
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/tasks/{task_id}:
     get:
-      tags: [Tasks]
-      summary: Get task
-      operationId: getTask
+      summary: Get Task
+      operationId: get_task_v1_tasks__task_id__get
+      security:
+      - HTTPBearer: []
       parameters:
-        - $ref: '#/components/parameters/TaskIdPath'
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
       responses:
         '200':
-          description: Task details
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Task'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/tasks/{taskId}/context:
-    get:
-      tags: [Tasks]
-      summary: Get bounded graph context for a task
-      operationId: getTaskContext
-      parameters:
-        - $ref: '#/components/parameters/TaskIdPath'
-        - $ref: '#/components/parameters/AncestorDepth'
-        - $ref: '#/components/parameters/DependentDepth'
-      responses:
-        '200':
-          description: Task context projection
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TaskContext'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/tasks/{taskId}/claim:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/tasks/{task_id}/artifacts:
     post:
-      tags: [Tasks]
-      summary: Claim a task and acquire lease
-      operationId: claimTask
+      summary: Create Task Artifact
+      operationId: create_task_artifact_v1_tasks__task_id__artifacts_post
+      security:
+      - HTTPBearer: []
       parameters:
-        - $ref: '#/components/parameters/TaskIdPath'
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
+      - name: task_id
+        in: path
         required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ClaimTaskRequest'
-      responses:
-        '200':
-          description: Claimed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ClaimTaskResponse'
-        '409':
-          description: Not claimable (lease/reservation/state conflict)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/tasks/{taskId}/assign:
-    post:
-      tags: [Tasks]
-      summary: Create hard reservation for a specific assignee
-      operationId: assignTask
-      parameters:
-        - $ref: '#/components/parameters/TaskIdPath'
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AssignTaskRequest'
-      responses:
-        '200':
-          description: Reserved
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskReservation'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/tasks/{taskId}/unassign:
-    post:
-      tags: [Tasks]
-      summary: Release hard reservation
-      operationId: unassignTask
-      parameters:
-        - $ref: '#/components/parameters/TaskIdPath'
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UnassignTaskRequest'
-      responses:
-        '200':
-          description: Released
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskReservation'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/tasks/{taskId}/heartbeat:
-    post:
-      tags: [Tasks]
-      summary: Extend lease and report seen plan version
-      operationId: heartbeatTask
-      parameters:
-        - $ref: '#/components/parameters/TaskIdPath'
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/HeartbeatRequest'
-      responses:
-        '200':
-          description: Heartbeat accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HeartbeatResponse'
-        '409':
-          description: Plan stale or invalid lease token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/tasks/{taskId}/artifacts:
-    post:
-      tags: [Tasks]
-      summary: Submit task artifacts (commit/check outputs)
-      operationId: addTaskArtifact
-      parameters:
-        - $ref: '#/components/parameters/TaskIdPath'
-        - $ref: '#/components/parameters/IdempotencyKey'
+        schema:
+          type: string
+          title: Task Id
       requestBody:
         required: true
         content:
@@ -297,1034 +474,1051 @@ paths:
               $ref: '#/components/schemas/CreateArtifactRequest'
       responses:
         '201':
-          description: Created
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Artifact'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/tasks/{taskId}/transition:
-    post:
-      tags: [Tasks]
-      summary: Transition task state
-      operationId: transitionTask
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      summary: List Task Artifacts
+      operationId: list_task_artifacts_v1_tasks__task_id__artifacts_get
+      security:
+      - HTTPBearer: []
       parameters:
-        - $ref: '#/components/parameters/TaskIdPath'
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
+      - name: task_id
+        in: path
         required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TransitionTaskRequest'
+        schema:
+          type: string
+          title: Task Id
+      - name: project_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Project Id
       responses:
         '200':
-          description: Transition applied
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Task'
-        '409':
-          description: Invariant violation
+                $ref: '#/components/schemas/ListArtifactsResponse'
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/tasks/{taskId}/changelog:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/tasks/{task_id}/integration-attempts:
     post:
-      tags: [Tasks]
-      summary: Append task changelog entry
-      operationId: appendTaskChangelog
+      summary: Enqueue Integration Attempt
+      operationId: enqueue_integration_attempt_v1_tasks__task_id__integration_attempts_post
+      security:
+      - HTTPBearer: []
       parameters:
-        - $ref: '#/components/parameters/TaskIdPath'
-        - $ref: '#/components/parameters/IdempotencyKey'
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateTaskChangelogEntryRequest'
+              $ref: '#/components/schemas/EnqueueIntegrationAttemptRequest'
       responses:
         '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskChangelogEntry'
-        default:
-          $ref: '#/components/responses/Error'
-    get:
-      tags: [Tasks]
-      summary: List task changelog entries
-      operationId: listTaskChangelog
-      parameters:
-        - $ref: '#/components/parameters/TaskIdPath'
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 500
-            default: 100
-      responses:
-        '200':
-          description: Changelog list
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [items]
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/TaskChangelogEntry'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/tasks/{taskId}/events:
-    get:
-      tags: [Tasks]
-      summary: List task event timeline (projection from global events)
-      operationId: listTaskEvents
-      parameters:
-        - $ref: '#/components/parameters/TaskIdPath'
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 500
-            default: 100
-      responses:
-        '200':
-          description: Event list
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [items]
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/TaskEvent'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/tasks/{taskId}/execution-snapshots:
-    get:
-      tags: [Tasks]
-      summary: List execution snapshots for auditability
-      operationId: listTaskExecutionSnapshots
-      parameters:
-        - $ref: '#/components/parameters/TaskIdPath'
-      responses:
-        '200':
-          description: Snapshot list
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [items]
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/TaskExecutionSnapshot'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/plans/changesets:
-    post:
-      tags: [Planning]
-      summary: Create plan change set
-      operationId: createPlanChangeset
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreatePlanChangesetRequest'
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PlanChangeset'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/plans/changesets/{changesetId}/validate:
-    post:
-      tags: [Planning]
-      summary: Validate plan change set and generate impact preview
-      operationId: validatePlanChangeset
-      parameters:
-        - $ref: '#/components/parameters/ChangesetIdPath'
-        - $ref: '#/components/parameters/IdempotencyKey'
-      responses:
-        '200':
-          description: Validated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PlanChangeset'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/plans/changesets/{changesetId}/apply:
-    post:
-      tags: [Planning]
-      summary: Apply plan change set atomically
-      operationId: applyPlanChangeset
-      parameters:
-        - $ref: '#/components/parameters/ChangesetIdPath'
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ApplyPlanChangesetRequest'
-      responses:
-        '200':
-          description: Applied
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApplyPlanChangesetResponse'
-        '409':
-          description: Stale base plan version or invariant violation
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/plans/current:
-    get:
-      tags: [Planning]
-      summary: Get current plan version
-      operationId: getCurrentPlanVersion
-      parameters:
-        - $ref: '#/components/parameters/ProjectIdQuery'
-      responses:
-        '200':
-          description: Current plan version
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PlanVersion'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/integration/enqueue:
-    post:
-      tags: [Integration]
-      summary: Enqueue task for integration
-      operationId: enqueueIntegration
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/EnqueueIntegrationRequest'
-      responses:
-        '202':
-          description: Accepted
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/IntegrationAttempt'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/gates/{gateId}/decision:
-    post:
-      tags: [Gates]
-      summary: Submit gate decision
-      operationId: decideGate
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      summary: List Integration Attempts
+      operationId: list_integration_attempts_v1_tasks__task_id__integration_attempts_get
+      security:
+      - HTTPBearer: []
       parameters:
-        - $ref: '#/components/parameters/GateIdPath'
-        - $ref: '#/components/parameters/IdempotencyKey'
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: project_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListIntegrationAttemptsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/integration-attempts/{attempt_id}/result:
+    post:
+      summary: Update Integration Attempt Result
+      operationId: update_integration_attempt_result_v1_integration_attempts__attempt_id__result_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: attempt_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Attempt Id
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GateDecisionRequest'
+              $ref: '#/components/schemas/UpdateIntegrationAttemptRequest'
       responses:
         '200':
-          description: Decision recorded
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GateDecision'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/views/graph:
-    get:
-      tags: [Views]
-      summary: Project graph view
-      operationId: getGraphView
+                $ref: '#/components/schemas/IntegrationAttempt'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/tasks/{task_id}/claim:
+    post:
+      summary: Claim Task
+      operationId: claim_task_v1_tasks__task_id__claim_post
+      security:
+      - HTTPBearer: []
       parameters:
-        - $ref: '#/components/parameters/ProjectIdQuery'
-        - name: include_completed
-          in: query
-          required: false
-          schema:
-            type: boolean
-            default: true
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimTaskRequest'
       responses:
         '200':
-          description: Graph projection
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GraphView'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /v1/views/list:
-    get:
-      tags: [Views]
-      summary: Project list view
-      operationId: getListView
+                $ref: '#/components/schemas/ClaimTaskResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/tasks/{task_id}/heartbeat:
+    post:
+      summary: Heartbeat Task
+      operationId: heartbeat_task_v1_tasks__task_id__heartbeat_post
+      security:
+      - HTTPBearer: []
       parameters:
-        - $ref: '#/components/parameters/ProjectIdQuery'
-        - name: include_completed
-          in: query
-          required: false
-          schema:
-            type: boolean
-            default: true
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HeartbeatRequest'
       responses:
         '200':
-          description: List projection
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ListView'
-        default:
-          $ref: '#/components/responses/Error'
-
+                $ref: '#/components/schemas/HeartbeatResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/tasks/{task_id}/assign:
+    post:
+      summary: Assign Task
+      operationId: assign_task_v1_tasks__task_id__assign_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignTaskRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskReservation'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/tasks/{task_id}/state:
+    post:
+      summary: Transition Task State
+      operationId: transition_task_state_v1_tasks__task_id__state_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskStateTransitionRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskStateTransitionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/plans/changesets:
+    post:
+      summary: Create Plan Changeset
+      operationId: create_plan_changeset_v1_plans_changesets_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlanChangesetRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanChangeset'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /v1/plans/changesets/{changeset_id}/apply:
+    post:
+      summary: Apply Plan Changeset
+      operationId: apply_plan_changeset_v1_plans_changesets__changeset_id__apply_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: changeset_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Changeset Id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/ApplyPlanChangesetRequest'
+              - type: 'null'
+              title: Payload
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplyPlanChangesetResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/api-keys:
+    post:
+      summary: Create Api Key
+      operationId: create_api_key_v1_api_keys_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApiKeyRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateApiKeyResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      summary: List Api Keys
+      operationId: list_api_keys_v1_api_keys_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListApiKeysResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/api-keys/{key_id}/revoke:
+    post:
+      summary: Revoke Api Key
+      operationId: revoke_api_key_v1_api_keys__key_id__revoke_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: key_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Key Id
+      - name: project_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevokeApiKeyResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/metrics/summary:
+    get:
+      summary: Get Metrics Summary
+      operationId: get_metrics_summary_v1_metrics_summary_get
+      parameters:
+      - name: project_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      - name: timestamp
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Timestamp
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsSummaryResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/metrics/trends:
+    get:
+      summary: Get Metrics Trends
+      operationId: get_metrics_trends_v1_metrics_trends_get
+      parameters:
+      - name: project_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      - name: metric
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Metric
+      - name: start_date
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Start Date
+      - name: end_date
+        in: query
+        required: true
+        schema:
+          type: string
+          title: End Date
+      - name: granularity
+        in: query
+        required: false
+        schema:
+          enum:
+          - hour
+          - day
+          - week
+          - month
+          type: string
+          default: day
+          title: Granularity
+      - name: dimensions
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Dimensions
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsTrendsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/metrics/breakdown:
+    get:
+      summary: Get Metrics Breakdown
+      operationId: get_metrics_breakdown_v1_metrics_breakdown_get
+      parameters:
+      - name: project_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      - name: metric
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Metric
+      - name: dimension
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Dimension
+      - name: time_range
+        in: query
+        required: false
+        schema:
+          enum:
+          - 24h
+          - 7d
+          - 30d
+          - 90d
+          type: string
+          default: 7d
+          title: Time Range
+      - name: filters
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Filters
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsBreakdownResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/metrics/drilldown:
+    get:
+      summary: Get Metrics Drilldown
+      operationId: get_metrics_drilldown_v1_metrics_drilldown_get
+      parameters:
+      - name: project_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      - name: metric
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Metric
+      - name: filters
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Filters
+      - name: sort_by
+        in: query
+        required: false
+        schema:
+          enum:
+          - value
+          - timestamp
+          - task_id
+          type: string
+          default: value
+          title: Sort By
+      - name: sort_order
+        in: query
+        required: false
+        schema:
+          enum:
+          - asc
+          - desc
+          type: string
+          default: desc
+          title: Sort Order
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsDrilldownResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/metrics/alerts:
+    get:
+      summary: List Metrics Alerts
+      operationId: list_metrics_alerts_v1_metrics_alerts_get
+      parameters:
+      - name: project_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      - name: severity
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Severity
+      - name: acknowledged
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Acknowledged
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsAlertListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/metrics/alerts/{alert_id}/acknowledge:
+    post:
+      summary: Acknowledge Alert
+      operationId: acknowledge_alert_v1_metrics_alerts__alert_id__acknowledge_post
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Alert Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcknowledgeAlertResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/metrics/actions:
+    get:
+      summary: Get Workflow Actions
+      operationId: get_workflow_actions_v1_metrics_actions_get
+      parameters:
+      - name: project_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowActionsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/metrics/health:
+    get:
+      summary: Get Metrics Health
+      operationId: get_metrics_health_v1_metrics_health_get
+      parameters:
+      - name: project_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsHealthResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /vite.svg:
+    get:
+      summary: Vite Icon
+      operationId: vite_icon_vite_svg_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /{full_path}:
+    get:
+      summary: Spa Fallback
+      description: Serve index.html for all non-API paths (SPA client-side routing).
+      operationId: spa_fallback__full_path__get
+      parameters:
+      - name: full_path
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Full Path
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
 components:
-  securitySchemes:
-    ApiKeyAuth:
-      type: http
-      scheme: bearer
-      description: "API key passed as Bearer token (e.g. Authorization: Bearer tsk_...)"
-
-  parameters:
-    IdempotencyKey:
-      name: Idempotency-Key
-      in: header
-      required: false
-      description: Optional client-provided idempotency key for safe retries.
-      schema:
-        type: string
-        minLength: 8
-        maxLength: 128
-    ProjectIdQuery:
-      name: project_id
-      in: query
-      required: true
-      schema:
-        type: string
-        format: uuid
-    TaskIdPath:
-      name: taskId
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-    ChangesetIdPath:
-      name: changesetId
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-    GateIdPath:
-      name: gateId
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-    AncestorDepth:
-      name: ancestor_depth
-      in: query
-      required: false
-      schema:
-        type: integer
-        minimum: 0
-        maximum: 5
-        default: 2
-    DependentDepth:
-      name: dependent_depth
-      in: query
-      required: false
-      schema:
-        type: integer
-        minimum: 0
-        maximum: 5
-        default: 1
-
-  responses:
-    Error:
-      description: Error response
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-
   schemas:
-    UUID:
-      type: string
-      format: uuid
-
-    Timestamp:
-      type: string
-      format: date-time
-
-    ErrorResponse:
-      type: object
-      required: [error]
-      properties:
-        error:
-          $ref: '#/components/schemas/ApiError'
-
-    ApiError:
-      type: object
-      required: [code, message]
-      properties:
-        code:
-          type: string
-          description: |
-            Machine error code, e.g. CYCLE_DETECTED, PLAN_STALE,
-            LEASE_INVALID, RESERVATION_CONFLICT, INVARIANT_VIOLATION.
-        message:
-          type: string
-        retryable:
-          type: boolean
-        correlation_id:
-          type: string
-        details:
-          type: object
-          additionalProperties: true
-
-    Project:
-      type: object
-      required: [id, name, status, created_at, updated_at]
+    AcknowledgeAlertResponse:
       properties:
         id:
-          $ref: '#/components/schemas/UUID'
-        org_id:
           type: string
-          format: uuid
-          nullable: true
-        name:
+          title: Id
+        acknowledged_at:
           type: string
-        status:
-          type: string
-          enum: [active, paused, archived]
-        created_at:
-          $ref: '#/components/schemas/Timestamp'
-        updated_at:
-          $ref: '#/components/schemas/Timestamp'
-
-    WorkSpec:
-      type: object
-      description: Structured execution spec consumed by agents.
-      required: [objective, acceptance_criteria]
-      properties:
-        objective:
-          type: string
-        constraints:
-          type: array
-          items:
-            type: string
-        acceptance_criteria:
-          type: array
-          items:
-            type: string
-        interfaces:
-          type: array
-          items:
-            type: string
-        path_hints:
-          type: array
-          items:
-            type: string
-
-    Task:
+          title: Acknowledged At
       type: object
       required:
-        - id
-        - project_id
-        - title
-        - state
-        - priority
-        - work_spec
-        - task_class
-        - capability_tags
-        - version
-        - created_at
-        - updated_at
+      - id
+      - acknowledged_at
+      title: AcknowledgeAlertResponse
+    AggregationSchema:
+      properties:
+        sum:
+          type: number
+          title: Sum
+          default: 0
+        avg:
+          type: number
+          title: Avg
+          default: 0
+        min:
+          type: number
+          title: Min
+          default: 0
+        max:
+          type: number
+          title: Max
+          default: 0
+        p50:
+          type: number
+          title: P50
+          default: 0
+        p90:
+          type: number
+          title: P90
+          default: 0
+        p95:
+          type: number
+          title: P95
+          default: 0
+      type: object
+      title: AggregationSchema
+    ApiKeyInfo:
       properties:
         id:
-          $ref: '#/components/schemas/UUID'
+          type: string
+          title: Id
         project_id:
-          $ref: '#/components/schemas/UUID'
-        phase_id:
-          allOf:
-            - $ref: '#/components/schemas/UUID'
-          nullable: true
-        milestone_id:
-          allOf:
-            - $ref: '#/components/schemas/UUID'
-          nullable: true
-        title:
           type: string
-        description:
-          type: string
-          nullable: true
-        state:
-          $ref: '#/components/schemas/TaskState'
-        priority:
-          type: integer
-        work_spec:
-          $ref: '#/components/schemas/WorkSpec'
-        task_class:
-          $ref: '#/components/schemas/TaskClass'
-        capability_tags:
-          type: array
-          items:
-            type: string
-        expected_touches:
-          type: array
-          items:
-            type: string
-        exclusive_paths:
-          type: array
-          items:
-            type: string
-        shared_paths:
-          type: array
-          items:
-            type: string
-        introduced_in_plan_version:
-          type: integer
-          nullable: true
-        deprecated_in_plan_version:
-          type: integer
-          nullable: true
-        version:
-          type: integer
-        created_at:
-          $ref: '#/components/schemas/Timestamp'
-        updated_at:
-          $ref: '#/components/schemas/Timestamp'
-
-    TaskSummary:
-      allOf:
-        - $ref: '#/components/schemas/Task'
-        - type: object
-          properties:
-            score:
-              type: number
-              format: double
-
-    TaskState:
-      type: string
-      enum:
-        - backlog
-        - ready
-        - reserved
-        - claimed
-        - in_progress
-        - implemented
-        - integrated
-        - conflict
-        - blocked
-        - abandoned
-        - cancelled
-
-    TaskClass:
-      type: string
-      enum:
-        - architecture
-        - db_schema
-        - security
-        - cross_cutting
-        - review_gate
-        - merge_gate
-        - frontend
-        - backend
-        - crud
-        - other
-
-    DependencyEdge:
-      type: object
-      required: [id, project_id, from_task_id, to_task_id, unlock_on]
-      properties:
-        id:
-          $ref: '#/components/schemas/UUID'
-        project_id:
-          $ref: '#/components/schemas/UUID'
-        from_task_id:
-          $ref: '#/components/schemas/UUID'
-        to_task_id:
-          $ref: '#/components/schemas/UUID'
-        unlock_on:
-          type: string
-          enum: [implemented, integrated]
-
-    Lease:
-      type: object
-      required: [id, task_id, agent_id, token, status, expires_at, heartbeat_at]
-      properties:
-        id:
-          $ref: '#/components/schemas/UUID'
-        task_id:
-          $ref: '#/components/schemas/UUID'
-        agent_id:
-          type: string
-        token:
-          type: string
-        status:
-          type: string
-          enum: [active, expired, released, consumed]
-        expires_at:
-          $ref: '#/components/schemas/Timestamp'
-        heartbeat_at:
-          $ref: '#/components/schemas/Timestamp'
-
-    TaskReservation:
-      type: object
-      required: [id, task_id, assignee_agent_id, mode, status, ttl_seconds, expires_at]
-      properties:
-        id:
-          $ref: '#/components/schemas/UUID'
-        project_id:
-          $ref: '#/components/schemas/UUID'
-        task_id:
-          $ref: '#/components/schemas/UUID'
-        assignee_agent_id:
-          type: string
-        mode:
-          type: string
-          enum: [hard]
-        status:
-          type: string
-          enum: [active, expired, released, consumed]
-        ttl_seconds:
-          type: integer
-        expires_at:
-          $ref: '#/components/schemas/Timestamp'
-        created_at:
-          $ref: '#/components/schemas/Timestamp'
-
-    Artifact:
-      type: object
-      required: [id, task_id, agent_id, check_status, created_at]
-      properties:
-        id:
-          $ref: '#/components/schemas/UUID'
-        task_id:
-          $ref: '#/components/schemas/UUID'
-        agent_id:
-          type: string
-        branch:
-          type: string
-          nullable: true
-        commit_sha:
-          type: string
-          nullable: true
-        check_suite_ref:
-          type: string
-          nullable: true
-        check_status:
-          type: string
-          enum: [pending, passed, failed]
-        touched_files:
-          type: array
-          items:
-            type: string
-        created_at:
-          $ref: '#/components/schemas/Timestamp'
-
-    IntegrationAttempt:
-      type: object
-      required: [id, task_id, result, started_at]
-      properties:
-        id:
-          $ref: '#/components/schemas/UUID'
-        task_id:
-          $ref: '#/components/schemas/UUID'
-        base_sha:
-          type: string
-          nullable: true
-        head_sha:
-          type: string
-          nullable: true
-        result:
-          type: string
-          enum: [success, conflict, failed_checks, queued]
-        diagnostics:
-          type: object
-          additionalProperties: true
-        started_at:
-          $ref: '#/components/schemas/Timestamp'
-        ended_at:
-          allOf:
-            - $ref: '#/components/schemas/Timestamp'
-          nullable: true
-
-    GateDecision:
-      type: object
-      required: [id, gate_rule_id, outcome, actor_id, created_at]
-      properties:
-        id:
-          $ref: '#/components/schemas/UUID'
-        gate_rule_id:
-          $ref: '#/components/schemas/UUID'
-        project_id:
-          $ref: '#/components/schemas/UUID'
-        task_id:
-          allOf:
-            - $ref: '#/components/schemas/UUID'
-          nullable: true
-        phase_id:
-          allOf:
-            - $ref: '#/components/schemas/UUID'
-          nullable: true
-        outcome:
-          type: string
-          enum: [approved, rejected, approved_with_risk]
-        actor_id:
-          type: string
-        reason:
-          type: string
-        evidence_refs:
-          type: object
-          additionalProperties: true
-        created_at:
-          $ref: '#/components/schemas/Timestamp'
-
-    PlanVersion:
-      type: object
-      required: [id, project_id, version_number, created_at, created_by]
-      properties:
-        id:
-          $ref: '#/components/schemas/UUID'
-        project_id:
-          $ref: '#/components/schemas/UUID'
-        version_number:
-          type: integer
-        change_set_id:
-          allOf:
-            - $ref: '#/components/schemas/UUID'
-          nullable: true
-        summary:
-          type: string
-          nullable: true
-        created_at:
-          $ref: '#/components/schemas/Timestamp'
-        created_by:
-          type: string
-
-    PlanChangeset:
-      type: object
-      required: [id, project_id, base_plan_version, target_plan_version, status, operations, created_at, created_by]
-      properties:
-        id:
-          $ref: '#/components/schemas/UUID'
-        project_id:
-          $ref: '#/components/schemas/UUID'
-        base_plan_version:
-          type: integer
-        target_plan_version:
-          type: integer
-        status:
-          type: string
-          enum: [draft, validated, applied, rejected]
-        operations:
-          type: array
-          items:
-            $ref: '#/components/schemas/PlanOperation'
-        impact_preview:
-          type: object
-          additionalProperties: true
-        created_at:
-          $ref: '#/components/schemas/Timestamp'
-        created_by:
-          type: string
-        applied_at:
-          allOf:
-            - $ref: '#/components/schemas/Timestamp'
-          nullable: true
-
-    PlanOperation:
-      type: object
-      required: [op]
-      properties:
-        op:
-          type: string
-          enum:
-            - add_task
-            - update_task
-            - deprecate_task
-            - reprioritize_task
-            - add_dependency
-            - remove_dependency
-            - move_phase
-            - update_unlock_on
-        task_id:
-          type: string
-          format: uuid
-        payload:
-          type: object
-          additionalProperties: true
-
-    TaskExecutionSnapshot:
-      type: object
-      required: [id, task_id, lease_id, captured_plan_version, work_spec_hash, work_spec_payload, captured_at, captured_by]
-      properties:
-        id:
-          $ref: '#/components/schemas/UUID'
-        project_id:
-          $ref: '#/components/schemas/UUID'
-        task_id:
-          $ref: '#/components/schemas/UUID'
-        lease_id:
-          $ref: '#/components/schemas/UUID'
-        captured_plan_version:
-          type: integer
-        work_spec_hash:
-          type: string
-        work_spec_payload:
-          $ref: '#/components/schemas/WorkSpec'
-        captured_at:
-          $ref: '#/components/schemas/Timestamp'
-        captured_by:
-          type: string
-
-    TaskChangelogEntry:
-      type: object
-      required: [id, project_id, task_id, author_type, entry_type, content, created_at]
-      properties:
-        id:
-          $ref: '#/components/schemas/UUID'
-        project_id:
-          $ref: '#/components/schemas/UUID'
-        task_id:
-          $ref: '#/components/schemas/UUID'
-        author_type:
-          type: string
-          enum: [human, agent, system]
-        author_id:
-          type: string
-          nullable: true
-        entry_type:
-          type: string
-          enum: [summary, decision, risk, note, outcome]
-        content:
-          type: string
-        artifact_refs:
-          type: object
-          additionalProperties: true
-        created_at:
-          $ref: '#/components/schemas/Timestamp'
-
-    TaskEvent:
-      type: object
-      required: [id, project_id, entity_type, entity_id, event_type, payload, created_at]
-      properties:
-        id:
-          type: integer
-          format: int64
-        project_id:
-          $ref: '#/components/schemas/UUID'
-        entity_type:
-          type: string
-        entity_id:
-          $ref: '#/components/schemas/UUID'
-        event_type:
-          type: string
-        payload:
-          type: object
-          additionalProperties: true
-        correlation_id:
-          type: string
-          nullable: true
-        created_at:
-          $ref: '#/components/schemas/Timestamp'
-
-    TaskContext:
-      type: object
-      required: [task, ancestors, dependents, recent_events, plan_version]
-      properties:
-        task:
-          $ref: '#/components/schemas/Task'
-        ancestors:
-          type: array
-          items:
-            $ref: '#/components/schemas/TaskSummary'
-        dependents:
-          type: array
-          items:
-            $ref: '#/components/schemas/TaskSummary'
-        open_blockers:
-          type: array
-          items:
-            type: string
-        recent_events:
-          type: array
-          items:
-            $ref: '#/components/schemas/TaskEvent'
-        plan_version:
-          $ref: '#/components/schemas/PlanVersion'
-
-    GraphView:
-      type: object
-      required: [nodes, edges]
-      properties:
-        nodes:
-          type: array
-          items:
-            $ref: '#/components/schemas/TaskSummary'
-        edges:
-          type: array
-          items:
-            $ref: '#/components/schemas/DependencyEdge'
-
-    ListView:
-      type: object
-      required: [items]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/TaskSummary'
-
-    CreateProjectRequest:
-      type: object
-      required: [name]
-      properties:
-        org_id:
-          type: string
-          format: uuid
-          nullable: true
+          title: Project Id
         name:
           type: string
-          minLength: 1
-        description:
+          title: Name
+        role_scopes:
+          items:
+            type: string
+          type: array
+          title: Role Scopes
+        status:
           type: string
-          nullable: true
-
-    CreateTaskRequest:
+          title: Status
+        created_by:
+          type: string
+          title: Created By
+        created_at:
+          type: string
+          title: Created At
+        last_used_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Used At
+        revoked_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Revoked At
       type: object
-      required: [project_id, title, work_spec, task_class]
+      required:
+      - id
+      - project_id
+      - name
+      - role_scopes
+      - status
+      - created_by
+      - created_at
+      title: ApiKeyInfo
+    ApplyPlanChangesetRequest:
       properties:
+        allow_rebase:
+          type: boolean
+          title: Allow Rebase
+          default: false
+        applied_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Applied By
+      type: object
+      title: ApplyPlanChangesetRequest
+    ApplyPlanChangesetResponse:
+      properties:
+        changeset:
+          $ref: '#/components/schemas/PlanChangeset'
+        plan_version:
+          $ref: '#/components/schemas/PlanVersion'
+        invalidated_claim_task_ids:
+          items:
+            type: string
+          type: array
+          title: Invalidated Claim Task Ids
+        invalidated_reservation_task_ids:
+          items:
+            type: string
+          type: array
+          title: Invalidated Reservation Task Ids
+      type: object
+      required:
+      - changeset
+      - plan_version
+      - invalidated_claim_task_ids
+      - invalidated_reservation_task_ids
+      title: ApplyPlanChangesetResponse
+    Artifact:
+      properties:
+        id:
+          type: string
+          title: Id
+        short_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Short Id
         project_id:
-          $ref: '#/components/schemas/UUID'
-        phase_id:
-          allOf:
-            - $ref: '#/components/schemas/UUID'
-          nullable: true
-        milestone_id:
-          allOf:
-            - $ref: '#/components/schemas/UUID'
-          nullable: true
-        title:
           type: string
-          minLength: 1
-        description:
+          title: Project Id
+        task_id:
           type: string
-        priority:
-          type: integer
-          default: 100
-        work_spec:
-          $ref: '#/components/schemas/WorkSpec'
-        task_class:
-          $ref: '#/components/schemas/TaskClass'
-        capability_tags:
-          type: array
-          items:
-            type: string
-        expected_touches:
-          type: array
-          items:
-            type: string
-        exclusive_paths:
-          type: array
-          items:
-            type: string
-        shared_paths:
-          type: array
-          items:
-            type: string
-
-    CreateDependencyRequest:
-      type: object
-      required: [project_id, from_task_id, to_task_id, unlock_on]
-      properties:
-        project_id:
-          $ref: '#/components/schemas/UUID'
-        from_task_id:
-          $ref: '#/components/schemas/UUID'
-        to_task_id:
-          $ref: '#/components/schemas/UUID'
-        unlock_on:
-          type: string
-          enum: [implemented, integrated]
-
-    GetReadyTasksResponse:
-      type: object
-      required: [items]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/TaskSummary'
-
-    ClaimTaskRequest:
-      type: object
-      required: [project_id, agent_id]
-      properties:
-        project_id:
-          $ref: '#/components/schemas/UUID'
+          title: Task Id
         agent_id:
           type: string
+          title: Agent Id
+        branch:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Branch
+        commit_sha:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Commit Sha
+        check_suite_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Check Suite Ref
+        check_status:
+          type: string
+          enum:
+          - pending
+          - passed
+          - failed
+          title: Check Status
+        touched_files:
+          items:
+            type: string
+          type: array
+          title: Touched Files
+        created_at:
+          type: string
+          title: Created At
+      type: object
+      required:
+      - id
+      - project_id
+      - task_id
+      - agent_id
+      - check_status
+      - touched_files
+      - created_at
+      title: Artifact
+    AssignTaskRequest:
+      properties:
+        project_id:
+          type: string
+          title: Project Id
+        assignee_agent_id:
+          type: string
+          title: Assignee Agent Id
+        created_by:
+          type: string
+          title: Created By
+        ttl_seconds:
+          type: integer
+          title: Ttl Seconds
+          default: 1800
+      type: object
+      required:
+      - project_id
+      - assignee_agent_id
+      - created_by
+      title: AssignTaskRequest
+    BreakdownItem:
+      properties:
+        dimension_value:
+          type: string
+          title: Dimension Value
+        value:
+          type: number
+          title: Value
+        percentage:
+          type: number
+          title: Percentage
+        count:
+          type: integer
+          title: Count
+          default: 0
+        trend:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Trend
+      type: object
+      required:
+      - dimension_value
+      - value
+      - percentage
+      title: BreakdownItem
+    ClaimTaskRequest:
+      properties:
+        project_id:
+          type: string
+          title: Project Id
+        agent_id:
+          type: string
+          title: Agent Id
         claim_mode:
           type: string
-          enum: [pull, directed]
+          enum:
+          - pull
+          - directed
+          title: Claim Mode
           default: pull
         seen_plan_version:
-          type: integer
-          nullable: true
-
-    ClaimTaskResponse:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Seen Plan Version
       type: object
-      required: [task, lease, execution_snapshot]
+      required:
+      - project_id
+      - agent_id
+      title: ClaimTaskRequest
+    ClaimTaskResponse:
       properties:
         task:
           $ref: '#/components/schemas/Task'
@@ -1332,205 +1526,2015 @@ components:
           $ref: '#/components/schemas/Lease'
         execution_snapshot:
           $ref: '#/components/schemas/TaskExecutionSnapshot'
-
-    AssignTaskRequest:
       type: object
-      required: [project_id, assignee_agent_id, created_by]
+      required:
+      - task
+      - lease
+      - execution_snapshot
+      title: ClaimTaskResponse
+    CreateApiKeyRequest:
       properties:
         project_id:
-          $ref: '#/components/schemas/UUID'
-        assignee_agent_id:
           type: string
-        ttl_seconds:
-          type: integer
-          minimum: 60
-          maximum: 86400
-          default: 1800
-        created_by:
+          title: Project Id
+        name:
           type: string
-
-    UnassignTaskRequest:
-      type: object
-      required: [project_id, released_by]
-      properties:
-        project_id:
-          $ref: '#/components/schemas/UUID'
-        released_by:
-          type: string
-        reason:
-          type: string
-
-    HeartbeatRequest:
-      type: object
-      required: [project_id, agent_id, lease_token]
-      properties:
-        project_id:
-          $ref: '#/components/schemas/UUID'
-        agent_id:
-          type: string
-        lease_token:
-          type: string
-        seen_plan_version:
-          type: integer
-          nullable: true
-
-    HeartbeatResponse:
-      type: object
-      required: [lease_expires_at, plan_version]
-      properties:
-        lease_expires_at:
-          $ref: '#/components/schemas/Timestamp'
-        plan_version:
-          type: integer
-        stale:
-          type: boolean
-          default: false
-        stale_action:
-          type: string
-          enum: [refresh, continue_with_notice, human_review]
-          nullable: true
-
-    CreateArtifactRequest:
-      type: object
-      required: [project_id, agent_id, check_status]
-      properties:
-        project_id:
-          $ref: '#/components/schemas/UUID'
-        agent_id:
-          type: string
-        branch:
-          type: string
-          nullable: true
-        commit_sha:
-          type: string
-          nullable: true
-        check_suite_ref:
-          type: string
-          nullable: true
-        check_status:
-          type: string
-          enum: [pending, passed, failed]
-        touched_files:
-          type: array
+          minLength: 1
+          title: Name
+        role_scopes:
           items:
             type: string
-
-    TransitionTaskRequest:
-      type: object
-      required: [project_id, from_state, to_state]
-      properties:
-        project_id:
-          $ref: '#/components/schemas/UUID'
-        from_state:
-          $ref: '#/components/schemas/TaskState'
-        to_state:
-          $ref: '#/components/schemas/TaskState'
-        lease_token:
-          type: string
-          nullable: true
-        reason:
-          type: string
-        seen_plan_version:
-          type: integer
-          nullable: true
-
-    CreateTaskChangelogEntryRequest:
-      type: object
-      required: [project_id, author_type, entry_type, content]
-      properties:
-        project_id:
-          $ref: '#/components/schemas/UUID'
-        author_type:
-          type: string
-          enum: [human, agent, system]
-        author_id:
-          type: string
-          nullable: true
-        entry_type:
-          type: string
-          enum: [summary, decision, risk, note, outcome]
-        content:
-          type: string
-        artifact_refs:
-          type: object
-          additionalProperties: true
-
-    CreatePlanChangesetRequest:
-      type: object
-      required: [project_id, base_plan_version, target_plan_version, operations, created_by]
-      properties:
-        project_id:
-          $ref: '#/components/schemas/UUID'
-        base_plan_version:
-          type: integer
-        target_plan_version:
-          type: integer
-        operations:
           type: array
-          minItems: 1
-          items:
-            $ref: '#/components/schemas/PlanOperation'
+          title: Role Scopes
         created_by:
           type: string
-
-    ApplyPlanChangesetRequest:
+          minLength: 1
+          title: Created By
       type: object
+      required:
+      - project_id
+      - name
+      - role_scopes
+      - created_by
+      title: CreateApiKeyRequest
+    CreateApiKeyResponse:
       properties:
-        allow_rebase:
-          type: boolean
-          default: false
-        applied_by:
+        id:
           type: string
-
-    ApplyPlanChangesetResponse:
-      type: object
-      required: [changeset, plan_version]
-      properties:
-        changeset:
-          $ref: '#/components/schemas/PlanChangeset'
-        plan_version:
-          $ref: '#/components/schemas/PlanVersion'
-        invalidated_claim_task_ids:
-          type: array
+          title: Id
+        project_id:
+          type: string
+          title: Project Id
+        name:
+          type: string
+          title: Name
+        role_scopes:
           items:
-            $ref: '#/components/schemas/UUID'
-        invalidated_reservation_task_ids:
+            type: string
           type: array
-          items:
-            $ref: '#/components/schemas/UUID'
-
-    EnqueueIntegrationRequest:
+          title: Role Scopes
+        raw_key:
+          type: string
+          title: Raw Key
+        created_at:
+          type: string
+          title: Created At
       type: object
-      required: [project_id, task_id, requested_by]
+      required:
+      - id
+      - project_id
+      - name
+      - role_scopes
+      - raw_key
+      - created_at
+      title: CreateApiKeyResponse
+      description: Returned only at creation time -- contains the raw key.
+    CreateArtifactRequest:
       properties:
         project_id:
-          $ref: '#/components/schemas/UUID'
-        task_id:
-          $ref: '#/components/schemas/UUID'
-        requested_by:
           type: string
-
-    GateDecisionRequest:
+          title: Project Id
+        agent_id:
+          type: string
+          minLength: 1
+          title: Agent Id
+        branch:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Branch
+        commit_sha:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Commit Sha
+        check_suite_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Check Suite Ref
+        check_status:
+          type: string
+          enum:
+          - pending
+          - passed
+          - failed
+          title: Check Status
+          default: pending
+        touched_files:
+          items:
+            type: string
+          type: array
+          title: Touched Files
       type: object
-      required: [project_id, outcome, actor_id, reason]
+      required:
+      - project_id
+      - agent_id
+      title: CreateArtifactRequest
+    CreateDependencyRequest:
       properties:
         project_id:
-          $ref: '#/components/schemas/UUID'
+          type: string
+          title: Project Id
+        from_task_id:
+          type: string
+          title: From Task Id
+        to_task_id:
+          type: string
+          title: To Task Id
+        unlock_on:
+          type: string
+          enum:
+          - implemented
+          - integrated
+          title: Unlock On
+      type: object
+      required:
+      - project_id
+      - from_task_id
+      - to_task_id
+      - unlock_on
+      title: CreateDependencyRequest
+    CreateGateDecisionRequest:
+      properties:
+        project_id:
+          type: string
+          title: Project Id
+        gate_rule_id:
+          type: string
+          title: Gate Rule Id
         task_id:
-          allOf:
-            - $ref: '#/components/schemas/UUID'
-          nullable: true
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task Id
         phase_id:
-          allOf:
-            - $ref: '#/components/schemas/UUID'
-          nullable: true
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phase Id
         outcome:
           type: string
-          enum: [approved, rejected, approved_with_risk]
+          enum:
+          - approved
+          - rejected
+          - approved_with_risk
+          title: Outcome
         actor_id:
           type: string
+          minLength: 1
+          title: Actor Id
         reason:
           type: string
+          minLength: 1
+          title: Reason
         evidence_refs:
-          type: object
+          items:
+            type: string
+          type: array
+          title: Evidence Refs
+      type: object
+      required:
+      - project_id
+      - gate_rule_id
+      - outcome
+      - actor_id
+      - reason
+      title: CreateGateDecisionRequest
+    CreateGateRuleRequest:
+      properties:
+        project_id:
+          type: string
+          title: Project Id
+        name:
+          type: string
+          minLength: 1
+          title: Name
+        scope:
           additionalProperties: true
+          type: object
+          title: Scope
+        conditions:
+          additionalProperties: true
+          type: object
+          title: Conditions
+        required_evidence:
+          additionalProperties: true
+          type: object
+          title: Required Evidence
+        required_reviewer_roles:
+          items:
+            type: string
+          type: array
+          title: Required Reviewer Roles
+        is_active:
+          type: boolean
+          title: Is Active
+          default: true
+      type: object
+      required:
+      - project_id
+      - name
+      title: CreateGateRuleRequest
+    CreatePlanChangesetRequest:
+      properties:
+        project_id:
+          type: string
+          title: Project Id
+        base_plan_version:
+          type: integer
+          title: Base Plan Version
+        target_plan_version:
+          type: integer
+          title: Target Plan Version
+        operations:
+          items:
+            $ref: '#/components/schemas/PlanOperation'
+          type: array
+          title: Operations
+        created_by:
+          type: string
+          title: Created By
+      type: object
+      required:
+      - project_id
+      - base_plan_version
+      - target_plan_version
+      - operations
+      - created_by
+      title: CreatePlanChangesetRequest
+    CreateProjectRequest:
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: Name
+      type: object
+      required:
+      - name
+      title: CreateProjectRequest
+    CreateTaskRequest:
+      properties:
+        project_id:
+          type: string
+          title: Project Id
+        title:
+          type: string
+          minLength: 1
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        priority:
+          type: integer
+          title: Priority
+          default: 100
+        work_spec:
+          $ref: '#/components/schemas/WorkSpec'
+        task_class:
+          type: string
+          enum:
+          - architecture
+          - db_schema
+          - security
+          - cross_cutting
+          - review_gate
+          - merge_gate
+          - frontend
+          - backend
+          - crud
+          - other
+          title: Task Class
+        capability_tags:
+          items:
+            type: string
+          type: array
+          title: Capability Tags
+        expected_touches:
+          items:
+            type: string
+          type: array
+          title: Expected Touches
+        exclusive_paths:
+          items:
+            type: string
+          type: array
+          title: Exclusive Paths
+        shared_paths:
+          items:
+            type: string
+          type: array
+          title: Shared Paths
+        phase_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phase Id
+        milestone_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Milestone Id
+      type: object
+      required:
+      - project_id
+      - title
+      - work_spec
+      - task_class
+      title: CreateTaskRequest
+    DependencyEdge:
+      properties:
+        id:
+          type: string
+          title: Id
+        project_id:
+          type: string
+          title: Project Id
+        from_task_id:
+          type: string
+          title: From Task Id
+        to_task_id:
+          type: string
+          title: To Task Id
+        unlock_on:
+          type: string
+          title: Unlock On
+        created_at:
+          type: string
+          title: Created At
+      type: object
+      required:
+      - id
+      - project_id
+      - from_task_id
+      - to_task_id
+      - unlock_on
+      - created_at
+      title: DependencyEdge
+    DrilldownItemSchema:
+      properties:
+        task_id:
+          type: string
+          title: Task Id
+        task_title:
+          type: string
+          title: Task Title
+          default: ''
+        value:
+          type: number
+          title: Value
+          default: 0
+        timestamp:
+          type: string
+          title: Timestamp
+          default: ''
+        context:
+          additionalProperties: true
+          type: object
+          title: Context
+        contributing_factors:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Contributing Factors
+      type: object
+      required:
+      - task_id
+      title: DrilldownItemSchema
+    EnqueueIntegrationAttemptRequest:
+      properties:
+        project_id:
+          type: string
+          title: Project Id
+        base_sha:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Base Sha
+        head_sha:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Head Sha
+        diagnostics:
+          additionalProperties: true
+          type: object
+          title: Diagnostics
+      type: object
+      required:
+      - project_id
+      title: EnqueueIntegrationAttemptRequest
+    GateCheckpoint:
+      properties:
+        task_id:
+          type: string
+          title: Task Id
+        task_short_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task Short Id
+        title:
+          type: string
+          title: Title
+        gate_type:
+          type: string
+          enum:
+          - review_gate
+          - merge_gate
+          title: Gate Type
+        state:
+          type: string
+          title: State
+        scope:
+          $ref: '#/components/schemas/GateCheckpointScope'
+        age_hours:
+          type: number
+          title: Age Hours
+        risk_summary:
+          $ref: '#/components/schemas/GateCheckpointRiskSummary'
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+      - task_id
+      - title
+      - gate_type
+      - state
+      - scope
+      - age_hours
+      - risk_summary
+      - created_at
+      - updated_at
+      title: GateCheckpoint
+    GateCheckpointRiskSummary:
+      properties:
+        policy_trigger:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Policy Trigger
+        candidate_total:
+          type: integer
+          title: Candidate Total
+          default: 0
+        candidate_ready:
+          type: integer
+          title: Candidate Ready
+          default: 0
+        candidate_blocked:
+          type: integer
+          title: Candidate Blocked
+          default: 0
+        blocked_candidate_ids:
+          items:
+            type: string
+          type: array
+          title: Blocked Candidate Ids
+      type: object
+      title: GateCheckpointRiskSummary
+    GateCheckpointScope:
+      properties:
+        phase_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phase Id
+        phase_short_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phase Short Id
+        milestone_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Milestone Id
+        milestone_short_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Milestone Short Id
+      type: object
+      title: GateCheckpointScope
+    GateDecision:
+      properties:
+        id:
+          type: string
+          title: Id
+        project_id:
+          type: string
+          title: Project Id
+        gate_rule_id:
+          type: string
+          title: Gate Rule Id
+        task_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task Id
+        phase_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phase Id
+        outcome:
+          type: string
+          enum:
+          - approved
+          - rejected
+          - approved_with_risk
+          title: Outcome
+        actor_id:
+          type: string
+          title: Actor Id
+        reason:
+          type: string
+          title: Reason
+        evidence_refs:
+          items:
+            type: string
+          type: array
+          title: Evidence Refs
+        created_at:
+          type: string
+          title: Created At
+      type: object
+      required:
+      - id
+      - project_id
+      - gate_rule_id
+      - outcome
+      - actor_id
+      - reason
+      - evidence_refs
+      - created_at
+      title: GateDecision
+    GateRule:
+      properties:
+        id:
+          type: string
+          title: Id
+        project_id:
+          type: string
+          title: Project Id
+        name:
+          type: string
+          title: Name
+        scope:
+          additionalProperties: true
+          type: object
+          title: Scope
+        conditions:
+          additionalProperties: true
+          type: object
+          title: Conditions
+        required_evidence:
+          additionalProperties: true
+          type: object
+          title: Required Evidence
+        required_reviewer_roles:
+          items:
+            type: string
+          type: array
+          title: Required Reviewer Roles
+        is_active:
+          type: boolean
+          title: Is Active
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+      - id
+      - project_id
+      - name
+      - scope
+      - conditions
+      - required_evidence
+      - required_reviewer_roles
+      - is_active
+      - created_at
+      - updated_at
+      title: GateRule
+    GetReadyTasksResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/TaskSummary'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: GetReadyTasksResponse
+    GraphTask:
+      properties:
+        id:
+          type: string
+          title: Id
+        short_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Short Id
+        project_id:
+          type: string
+          title: Project Id
+        phase_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phase Id
+        milestone_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Milestone Id
+        title:
+          type: string
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        state:
+          type: string
+          title: State
+        priority:
+          type: integer
+          title: Priority
+        work_spec:
+          additionalProperties: true
+          type: object
+          title: Work Spec
+        task_class:
+          type: string
+          title: Task Class
+        capability_tags:
+          items:
+            type: string
+          type: array
+          title: Capability Tags
+        expected_touches:
+          items:
+            type: string
+          type: array
+          title: Expected Touches
+        exclusive_paths:
+          items:
+            type: string
+          type: array
+          title: Exclusive Paths
+        shared_paths:
+          items:
+            type: string
+          type: array
+          title: Shared Paths
+        introduced_in_plan_version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Introduced In Plan Version
+        deprecated_in_plan_version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Deprecated In Plan Version
+        version:
+          type: integer
+          title: Version
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+      - id
+      - project_id
+      - title
+      - state
+      - priority
+      - work_spec
+      - task_class
+      - capability_tags
+      - expected_touches
+      - exclusive_paths
+      - shared_paths
+      - version
+      - created_at
+      - updated_at
+      title: GraphTask
+      description: 'Task representation for the project graph endpoint.
+
+
+        Uses ``dict`` for ``work_spec`` so that enriched fields such as
+
+        ``candidate_readiness`` are preserved in the response, matching the
+
+        MCP ``get_project_graph`` output shape.'
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    HeartbeatRequest:
+      properties:
+        project_id:
+          type: string
+          title: Project Id
+        agent_id:
+          type: string
+          title: Agent Id
+        lease_token:
+          type: string
+          title: Lease Token
+        seen_plan_version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Seen Plan Version
+      type: object
+      required:
+      - project_id
+      - agent_id
+      - lease_token
+      title: HeartbeatRequest
+    HeartbeatResponse:
+      properties:
+        lease_expires_at:
+          type: string
+          title: Lease Expires At
+        plan_version:
+          type: integer
+          title: Plan Version
+        stale:
+          type: boolean
+          title: Stale
+          default: false
+        stale_action:
+          anyOf:
+          - type: string
+            enum:
+            - refresh
+            - continue_with_notice
+            - human_review
+          - type: 'null'
+          title: Stale Action
+      type: object
+      required:
+      - lease_expires_at
+      - plan_version
+      title: HeartbeatResponse
+    IntegrationAttempt:
+      properties:
+        id:
+          type: string
+          title: Id
+        short_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Short Id
+        project_id:
+          type: string
+          title: Project Id
+        task_id:
+          type: string
+          title: Task Id
+        base_sha:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Base Sha
+        head_sha:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Head Sha
+        result:
+          type: string
+          enum:
+          - queued
+          - success
+          - conflict
+          - failed_checks
+          title: Result
+        diagnostics:
+          additionalProperties: true
+          type: object
+          title: Diagnostics
+        started_at:
+          type: string
+          title: Started At
+        ended_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ended At
+      type: object
+      required:
+      - id
+      - project_id
+      - task_id
+      - result
+      - diagnostics
+      - started_at
+      title: IntegrationAttempt
+    Lease:
+      properties:
+        id:
+          type: string
+          title: Id
+        project_id:
+          type: string
+          title: Project Id
+        task_id:
+          type: string
+          title: Task Id
+        agent_id:
+          type: string
+          title: Agent Id
+        token:
+          type: string
+          title: Token
+        status:
+          type: string
+          title: Status
+        expires_at:
+          type: string
+          title: Expires At
+        heartbeat_at:
+          type: string
+          title: Heartbeat At
+        fencing_counter:
+          type: integer
+          title: Fencing Counter
+        created_at:
+          type: string
+          title: Created At
+        released_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Released At
+      type: object
+      required:
+      - id
+      - project_id
+      - task_id
+      - agent_id
+      - token
+      - status
+      - expires_at
+      - heartbeat_at
+      - fencing_counter
+      - created_at
+      title: Lease
+    ListApiKeysResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ApiKeyInfo'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: ListApiKeysResponse
+    ListArtifactsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/Artifact'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: ListArtifactsResponse
+    ListGateCheckpointsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/GateCheckpoint'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+      type: object
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      title: ListGateCheckpointsResponse
+    ListGateDecisionsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/GateDecision'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: ListGateDecisionsResponse
+    ListIntegrationAttemptsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/IntegrationAttempt'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: ListIntegrationAttemptsResponse
+    ListProjectsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/Project'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: ListProjectsResponse
+    ListTasksResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/TaskSummary'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+      type: object
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      title: ListTasksResponse
+    MetricsAlertListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/MetricsAlertSchema'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: MetricsAlertListResponse
+    MetricsAlertSchema:
+      properties:
+        id:
+          type: string
+          title: Id
+        project_id:
+          type: string
+          title: Project Id
+        metric_key:
+          type: string
+          title: Metric Key
+        alert_type:
+          type: string
+          enum:
+          - threshold
+          - anomaly
+          title: Alert Type
+        severity:
+          type: string
+          enum:
+          - warning
+          - critical
+          - emergency
+          title: Severity
+        value:
+          type: number
+          title: Value
+        threshold:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Threshold
+        context:
+          additionalProperties: true
+          type: object
+          title: Context
+        created_at:
+          type: string
+          title: Created At
+        acknowledged_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Acknowledged At
+      type: object
+      required:
+      - id
+      - project_id
+      - metric_key
+      - alert_type
+      - severity
+      - value
+      - created_at
+      title: MetricsAlertSchema
+    MetricsBreakdownResponse:
+      properties:
+        version:
+          type: string
+          title: Version
+          default: '1.0'
+        project_id:
+          type: string
+          title: Project Id
+        metric:
+          type: string
+          title: Metric
+        dimension:
+          type: string
+          title: Dimension
+        time_range:
+          type: string
+          title: Time Range
+          default: 7d
+        total:
+          type: number
+          title: Total
+          default: 0
+        breakdown:
+          items:
+            $ref: '#/components/schemas/BreakdownItem'
+          type: array
+          title: Breakdown
+      type: object
+      required:
+      - project_id
+      - metric
+      - dimension
+      - breakdown
+      title: MetricsBreakdownResponse
+    MetricsDrilldownResponse:
+      properties:
+        version:
+          type: string
+          title: Version
+          default: '1.0'
+        project_id:
+          type: string
+          title: Project Id
+        metric:
+          type: string
+          title: Metric
+        filters_applied:
+          additionalProperties: true
+          type: object
+          title: Filters Applied
+        items:
+          items:
+            $ref: '#/components/schemas/DrilldownItemSchema'
+          type: array
+          title: Items
+        pagination:
+          $ref: '#/components/schemas/PaginationSchema'
+        aggregation:
+          $ref: '#/components/schemas/AggregationSchema'
+      type: object
+      required:
+      - project_id
+      - metric
+      - items
+      - pagination
+      - aggregation
+      title: MetricsDrilldownResponse
+    MetricsHealthResponse:
+      properties:
+        version:
+          type: string
+          title: Version
+          default: '1.0'
+        project_id:
+          type: string
+          title: Project Id
+        milestones:
+          items:
+            $ref: '#/components/schemas/MilestoneHealthItem'
+          type: array
+          title: Milestones
+      type: object
+      required:
+      - project_id
+      - milestones
+      title: MetricsHealthResponse
+    MetricsSummaryResponse:
+      properties:
+        version:
+          type: string
+          title: Version
+          default: '1.0'
+        project_id:
+          type: string
+          title: Project Id
+        timestamp:
+          type: string
+          title: Timestamp
+        metrics:
+          additionalProperties: true
+          type: object
+          title: Metrics
+      type: object
+      required:
+      - project_id
+      - timestamp
+      - metrics
+      title: MetricsSummaryResponse
+    MetricsTrendsResponse:
+      properties:
+        version:
+          type: string
+          title: Version
+          default: '1.0'
+        project_id:
+          type: string
+          title: Project Id
+        metric:
+          type: string
+          title: Metric
+        granularity:
+          type: string
+          title: Granularity
+        start_date:
+          type: string
+          title: Start Date
+        end_date:
+          type: string
+          title: End Date
+        data:
+          items:
+            $ref: '#/components/schemas/TrendDataPoint'
+          type: array
+          title: Data
+      type: object
+      required:
+      - project_id
+      - metric
+      - granularity
+      - start_date
+      - end_date
+      - data
+      title: MetricsTrendsResponse
+    Milestone:
+      properties:
+        id:
+          type: string
+          title: Id
+        short_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Short Id
+        project_id:
+          type: string
+          title: Project Id
+        phase_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phase Id
+        name:
+          type: string
+          title: Name
+        sequence:
+          type: integer
+          title: Sequence
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+      - id
+      - project_id
+      - name
+      - sequence
+      - created_at
+      - updated_at
+      title: Milestone
+    MilestoneHealthItem:
+      properties:
+        milestone_id:
+          type: string
+          title: Milestone Id
+        name:
+          type: string
+          title: Name
+        health_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Health Score
+        health_status:
+          type: string
+          title: Health Status
+        breach_probability:
+          type: number
+          title: Breach Probability
+        task_summary:
+          $ref: '#/components/schemas/MilestoneTaskSummary'
+      type: object
+      required:
+      - milestone_id
+      - name
+      - health_status
+      - breach_probability
+      - task_summary
+      title: MilestoneHealthItem
+    MilestoneTaskSummary:
+      properties:
+        total:
+          type: integer
+          title: Total
+        completed:
+          type: integer
+          title: Completed
+        remaining:
+          type: integer
+          title: Remaining
+        avg_cycle_time_hours:
+          type: number
+          title: Avg Cycle Time Hours
+      type: object
+      required:
+      - total
+      - completed
+      - remaining
+      - avg_cycle_time_hours
+      title: MilestoneTaskSummary
+    PaginationSchema:
+      properties:
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+        has_more:
+          type: boolean
+          title: Has More
+      type: object
+      required:
+      - total
+      - limit
+      - offset
+      - has_more
+      title: PaginationSchema
+    Phase:
+      properties:
+        id:
+          type: string
+          title: Id
+        short_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Short Id
+        project_id:
+          type: string
+          title: Project Id
+        name:
+          type: string
+          title: Name
+        sequence:
+          type: integer
+          title: Sequence
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+      - id
+      - project_id
+      - name
+      - sequence
+      - created_at
+      - updated_at
+      title: Phase
+    PlanChangeset:
+      properties:
+        id:
+          type: string
+          title: Id
+        project_id:
+          type: string
+          title: Project Id
+        base_plan_version:
+          type: integer
+          title: Base Plan Version
+        target_plan_version:
+          type: integer
+          title: Target Plan Version
+        status:
+          type: string
+          title: Status
+        operations:
+          items:
+            $ref: '#/components/schemas/PlanOperation'
+          type: array
+          title: Operations
+        impact_preview:
+          additionalProperties: true
+          type: object
+          title: Impact Preview
+        created_at:
+          type: string
+          title: Created At
+        created_by:
+          type: string
+          title: Created By
+        applied_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Applied At
+      type: object
+      required:
+      - id
+      - project_id
+      - base_plan_version
+      - target_plan_version
+      - status
+      - operations
+      - created_at
+      - created_by
+      title: PlanChangeset
+    PlanOperation:
+      properties:
+        op:
+          type: string
+          title: Op
+        task_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task Id
+        payload:
+          additionalProperties: true
+          type: object
+          title: Payload
+      type: object
+      required:
+      - op
+      title: PlanOperation
+    PlanVersion:
+      properties:
+        id:
+          type: string
+          title: Id
+        project_id:
+          type: string
+          title: Project Id
+        version_number:
+          type: integer
+          title: Version Number
+        change_set_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Change Set Id
+        summary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Summary
+        created_by:
+          type: string
+          title: Created By
+        created_at:
+          type: string
+          title: Created At
+      type: object
+      required:
+      - id
+      - project_id
+      - version_number
+      - created_by
+      - created_at
+      title: PlanVersion
+    Project:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        status:
+          type: string
+          title: Status
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+      - id
+      - name
+      - status
+      - created_at
+      - updated_at
+      title: Project
+    ProjectGraphResponse:
+      properties:
+        project:
+          $ref: '#/components/schemas/Project'
+        phases:
+          items:
+            $ref: '#/components/schemas/Phase'
+          type: array
+          title: Phases
+        milestones:
+          items:
+            $ref: '#/components/schemas/Milestone'
+          type: array
+          title: Milestones
+        tasks:
+          items:
+            $ref: '#/components/schemas/GraphTask'
+          type: array
+          title: Tasks
+        dependencies:
+          items:
+            $ref: '#/components/schemas/DependencyEdge'
+          type: array
+          title: Dependencies
+      type: object
+      required:
+      - project
+      - phases
+      - milestones
+      - tasks
+      - dependencies
+      title: ProjectGraphResponse
+    RevokeApiKeyResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        status:
+          type: string
+          title: Status
+        revoked_at:
+          type: string
+          title: Revoked At
+      type: object
+      required:
+      - id
+      - status
+      - revoked_at
+      title: RevokeApiKeyResponse
+    Task:
+      properties:
+        id:
+          type: string
+          title: Id
+        short_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Short Id
+        project_id:
+          type: string
+          title: Project Id
+        phase_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phase Id
+        milestone_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Milestone Id
+        title:
+          type: string
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        state:
+          type: string
+          title: State
+        priority:
+          type: integer
+          title: Priority
+        work_spec:
+          $ref: '#/components/schemas/WorkSpec'
+        task_class:
+          type: string
+          title: Task Class
+        capability_tags:
+          items:
+            type: string
+          type: array
+          title: Capability Tags
+        expected_touches:
+          items:
+            type: string
+          type: array
+          title: Expected Touches
+        exclusive_paths:
+          items:
+            type: string
+          type: array
+          title: Exclusive Paths
+        shared_paths:
+          items:
+            type: string
+          type: array
+          title: Shared Paths
+        introduced_in_plan_version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Introduced In Plan Version
+        deprecated_in_plan_version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Deprecated In Plan Version
+        version:
+          type: integer
+          title: Version
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+      - id
+      - project_id
+      - title
+      - state
+      - priority
+      - work_spec
+      - task_class
+      - capability_tags
+      - expected_touches
+      - exclusive_paths
+      - shared_paths
+      - version
+      - created_at
+      - updated_at
+      title: Task
+    TaskExecutionSnapshot:
+      properties:
+        id:
+          type: string
+          title: Id
+        project_id:
+          type: string
+          title: Project Id
+        task_id:
+          type: string
+          title: Task Id
+        lease_id:
+          type: string
+          title: Lease Id
+        captured_plan_version:
+          type: integer
+          title: Captured Plan Version
+        work_spec_hash:
+          type: string
+          title: Work Spec Hash
+        work_spec_payload:
+          $ref: '#/components/schemas/WorkSpec'
+        captured_by:
+          type: string
+          title: Captured By
+        captured_at:
+          type: string
+          title: Captured At
+      type: object
+      required:
+      - id
+      - project_id
+      - task_id
+      - lease_id
+      - captured_plan_version
+      - work_spec_hash
+      - work_spec_payload
+      - captured_by
+      - captured_at
+      title: TaskExecutionSnapshot
+    TaskReservation:
+      properties:
+        id:
+          type: string
+          title: Id
+        project_id:
+          type: string
+          title: Project Id
+        task_id:
+          type: string
+          title: Task Id
+        assignee_agent_id:
+          type: string
+          title: Assignee Agent Id
+        mode:
+          type: string
+          const: hard
+          title: Mode
+        status:
+          type: string
+          title: Status
+        ttl_seconds:
+          type: integer
+          title: Ttl Seconds
+        created_by:
+          type: string
+          title: Created By
+        created_at:
+          type: string
+          title: Created At
+        expires_at:
+          type: string
+          title: Expires At
+        released_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Released At
+      type: object
+      required:
+      - id
+      - project_id
+      - task_id
+      - assignee_agent_id
+      - mode
+      - status
+      - ttl_seconds
+      - created_by
+      - created_at
+      - expires_at
+      title: TaskReservation
+    TaskStateTransitionRequest:
+      properties:
+        project_id:
+          type: string
+          title: Project Id
+        new_state:
+          type: string
+          enum:
+          - backlog
+          - ready
+          - reserved
+          - claimed
+          - in_progress
+          - implemented
+          - integrated
+          - conflict
+          - blocked
+          - abandoned
+          - cancelled
+          title: New State
+        actor_id:
+          type: string
+          title: Actor Id
+        reason:
+          type: string
+          minLength: 1
+          title: Reason
+        reviewed_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reviewed By
+        review_evidence_refs:
+          items:
+            type: string
+          type: array
+          title: Review Evidence Refs
+        force:
+          type: boolean
+          title: Force
+          default: false
+      type: object
+      required:
+      - project_id
+      - new_state
+      - actor_id
+      - reason
+      title: TaskStateTransitionRequest
+    TaskStateTransitionResponse:
+      properties:
+        task:
+          $ref: '#/components/schemas/Task'
+      type: object
+      required:
+      - task
+      title: TaskStateTransitionResponse
+    TaskSummary:
+      properties:
+        id:
+          type: string
+          title: Id
+        short_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Short Id
+        project_id:
+          type: string
+          title: Project Id
+        phase_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phase Id
+        milestone_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Milestone Id
+        title:
+          type: string
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        state:
+          type: string
+          title: State
+        priority:
+          type: integer
+          title: Priority
+        work_spec:
+          $ref: '#/components/schemas/WorkSpec'
+        task_class:
+          type: string
+          title: Task Class
+        capability_tags:
+          items:
+            type: string
+          type: array
+          title: Capability Tags
+        expected_touches:
+          items:
+            type: string
+          type: array
+          title: Expected Touches
+        exclusive_paths:
+          items:
+            type: string
+          type: array
+          title: Exclusive Paths
+        shared_paths:
+          items:
+            type: string
+          type: array
+          title: Shared Paths
+        introduced_in_plan_version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Introduced In Plan Version
+        deprecated_in_plan_version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Deprecated In Plan Version
+        version:
+          type: integer
+          title: Version
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+        score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Score
+      type: object
+      required:
+      - id
+      - project_id
+      - title
+      - state
+      - priority
+      - work_spec
+      - task_class
+      - capability_tags
+      - expected_touches
+      - exclusive_paths
+      - shared_paths
+      - version
+      - created_at
+      - updated_at
+      title: TaskSummary
+    TrendDataPoint:
+      properties:
+        timestamp:
+          type: string
+          title: Timestamp
+        value:
+          type: number
+          title: Value
+        dimensions:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Dimensions
+        metadata:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Metadata
+      type: object
+      required:
+      - timestamp
+      - value
+      title: TrendDataPoint
+    UpdateIntegrationAttemptRequest:
+      properties:
+        project_id:
+          type: string
+          title: Project Id
+        result:
+          type: string
+          enum:
+          - success
+          - conflict
+          - failed_checks
+          title: Result
+        diagnostics:
+          additionalProperties: true
+          type: object
+          title: Diagnostics
+      type: object
+      required:
+      - project_id
+      - result
+      title: UpdateIntegrationAttemptRequest
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    WorkSpec:
+      properties:
+        objective:
+          type: string
+          title: Objective
+        constraints:
+          items:
+            type: string
+          type: array
+          title: Constraints
+        acceptance_criteria:
+          items:
+            type: string
+          type: array
+          title: Acceptance Criteria
+        interfaces:
+          items:
+            type: string
+          type: array
+          title: Interfaces
+        path_hints:
+          items:
+            type: string
+          type: array
+          title: Path Hints
+      type: object
+      required:
+      - objective
+      - acceptance_criteria
+      title: WorkSpec
+    WorkflowActionsResponse:
+      properties:
+        version:
+          type: string
+          title: Version
+          default: '1.0'
+        project_id:
+          type: string
+          title: Project Id
+        suggestions:
+          items:
+            $ref: '#/components/schemas/WorkflowSuggestion'
+          type: array
+          title: Suggestions
+      type: object
+      required:
+      - project_id
+      - suggestions
+      title: WorkflowActionsResponse
+    WorkflowSuggestion:
+      properties:
+        action_type:
+          type: string
+          enum:
+          - reroute_reviewer
+          - escalate
+          title: Action Type
+        confidence:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Confidence
+        affected_tasks:
+          items:
+            type: string
+          type: array
+          title: Affected Tasks
+        rationale:
+          type: string
+          title: Rationale
+        evidence_refs:
+          items:
+            type: string
+          type: array
+          title: Evidence Refs
+      type: object
+      required:
+      - action_type
+      - confidence
+      - rationale
+      title: WorkflowSuggestion
+  securitySchemes:
+    HTTPBearer:
+      type: http
+      scheme: bearer

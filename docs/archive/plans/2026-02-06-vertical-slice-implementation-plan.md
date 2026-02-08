@@ -1,5 +1,8 @@
 # Tascade Vertical Slice Implementation Plan
 
+> Historical dated document.
+> Treat scope and sequencing in this file as point-in-time planning context; verify current implementation in code/tests.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Implement a minimal working coordinator vertical slice for core task execution, claiming, replanning, and dependency validation from the v0.1 contracts.

@@ -1,5 +1,8 @@
 # Subagent Worktree Trial - 2026-02-07
 
+> Historical dated document.
+> Treat findings and recommendations in this file as point-in-time and verify against current code/tests and process docs before acting.
+
 ## Objective
 
 Validate that `AGENTS.task.md` is sufficient for a task-scoped subagent lane and supports orchestrator scanning without manual deep inspection.

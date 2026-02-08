@@ -1,5 +1,8 @@
 # Tascade Identifier Scheme Migration Spec
 
+> Historical dated document.
+> Treat scope and sequencing in this file as point-in-time planning context; verify current implementation in code/tests.
+
 Date: 2026-02-07
 Status: Proposed
 Depends on: `docs/plans/2026-02-07-identifier-scheme-design.md`
@@ -284,4 +287,3 @@ Apply equivalent checks for all entities.
 - ORM/model updates in `app/models.py`.
 - Store/schema updates for short-ID payload surface.
 - Tests for migration and allocator behavior.
-

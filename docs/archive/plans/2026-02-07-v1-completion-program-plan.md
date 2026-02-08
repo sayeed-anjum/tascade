@@ -4,6 +4,10 @@ Date: 2026-02-07
 Project ID: `66b79018-c5e0-4880-864e-e2462be613d2`
 Status: Active, synced to project graph on 2026-02-07
 
+> Historical execution snapshot.
+> This plan captured sequencing and remaining work as of 2026-02-07.
+> Treat task/runtime status in this file as historical unless reconfirmed against current code/tests and live task graph.
+
 ## Goal
 
 Close remaining v1 gaps from PRD/SRS and complete the end-to-end reviewer/operator workflow with production-grade visibility and access controls.

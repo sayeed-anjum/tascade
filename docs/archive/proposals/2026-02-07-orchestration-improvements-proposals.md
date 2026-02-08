@@ -1,5 +1,8 @@
 # Orchestration Improvements Proposals (Backlog)
 
+> Historical dated document.
+> This file captures proposal-state ideas from 2026-02-07 and is not an authoritative statement of current execution scope.
+
 Date: 2026-02-07
 Status: Proposal Backlog (for planning phase)
 

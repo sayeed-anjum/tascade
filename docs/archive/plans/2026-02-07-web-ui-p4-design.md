@@ -1,5 +1,8 @@
 # P4 Web UI Design Document
 
+> Historical dated document.
+> Treat scope and sequencing in this file as point-in-time design context; verify current implementation in code/tests.
+
 Date: 2026-02-07
 Phase: `P4 - Web UI Product Surface`
 Status: Draft
