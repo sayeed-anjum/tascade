@@ -20,11 +20,13 @@ export interface MetricsDashboardProps {
   projectId: string;
 }
 
-/** Default date range: last 30 days. */
+/** Default date range: last 7 days (covers recent hourly activity). */
 function defaultDateRange(): { start: string; end: string } {
   const end = new Date();
+  // Push end to tomorrow so today's data is included
+  end.setDate(end.getDate() + 1);
   const start = new Date(end);
-  start.setDate(start.getDate() - 30);
+  start.setDate(start.getDate() - 7);
   return {
     start: start.toISOString().slice(0, 10),
     end: end.toISOString().slice(0, 10),
@@ -56,6 +58,7 @@ export default function MetricsDashboard({ projectId }: MetricsDashboardProps) {
     activeTrend,
     dateRange.start,
     dateRange.end,
+    'hour',
   );
 
   const { data: breakdownData, isLoading: breakdownLoading } =

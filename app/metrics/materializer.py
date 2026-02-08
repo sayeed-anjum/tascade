@@ -404,6 +404,125 @@ def materialize_metrics(project_id: str) -> dict[str, Any]:
     }
 
 
+def _compute_snapshot_at(
+    tasks: list[Any],
+    as_of: datetime,
+) -> dict[str, float]:
+    """Compute key metrics as if the clock were ``as_of``.
+
+    Uses ``updated_at`` to infer which tasks had reached ``integrated``
+    state by that time.  Returns a dict of metric_key → value suitable
+    for trend point insertion.
+    """
+    # Only consider tasks that existed by as_of
+    existing = [t for t in tasks if _ensure_aware(t.created_at) <= as_of]
+    total = len(existing)
+    if total == 0:
+        return {
+            "delivery_predictability_index": 0.0,
+            "flow_efficiency_score": 0.0,
+            "integration_reliability_score": 0.0,
+            "throughput": 0.0,
+            "cycle_time": 0.0,
+        }
+
+    # Tasks integrated by as_of: state==INTEGRATED and updated_at <= as_of
+    integrated = [
+        t for t in existing
+        if t.state == TaskState.INTEGRATED
+        and _ensure_aware(t.updated_at) <= as_of
+    ]
+    integrated_count = len(integrated)
+
+    # Cycle times for integrated tasks
+    cycle_times = [
+        max((_ensure_aware(t.updated_at) - _ensure_aware(t.created_at)).total_seconds(), 0.0)
+        for t in integrated
+    ]
+
+    # DPI
+    ct_stab = calculators.cycle_time_stability(cycle_times)
+    sched = 0.8 if (total > 0 and integrated_count / total > 0.5) else 0.5
+    blocked_n = sum(
+        1 for t in existing
+        if t.state == TaskState.BLOCKED
+        and _ensure_aware(t.updated_at) <= as_of
+    )
+    blocker_r = _safe_divide(total - blocked_n, total)
+    dpi_raw = calculators.delivery_predictability_index(sched, ct_stab, blocker_r)
+    dpi = round((dpi_raw or 0) * 100, 2)
+
+    # FES (integrated tasks count as completed active work)
+    active_n = integrated_count
+    wait_n = total - integrated_count - blocked_n
+    if wait_n < 0:
+        wait_n = 0
+    fes_raw = calculators.flow_efficiency_score(
+        float(active_n), float(wait_n), float(blocked_n),
+    )
+    fes = round((fes_raw or 0) * 100, 2)
+
+    # Cycle time p50
+    ct_dist = calculators.cycle_time_distribution(cycle_times)
+    ct_p50 = round((ct_dist["p50"] or 0) / 60.0, 2)
+
+    return {
+        "delivery_predictability_index": dpi,
+        "flow_efficiency_score": fes,
+        "integration_reliability_score": 0.0,
+        "throughput": float(integrated_count),
+        "cycle_time": ct_p50,
+    }
+
+
+def backfill_hourly_trends(project_id: str) -> int:
+    """Generate hourly trend points from task history.
+
+    Walks each hour from the earliest task creation to now and computes
+    a snapshot of the key metrics at that hour.  Returns the number of
+    trend points written.
+    """
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+
+    with SessionLocal.begin() as session:
+        tasks = (
+            session.execute(
+                select(TaskModel).where(TaskModel.project_id == project_id)
+            )
+            .scalars()
+            .all()
+        )
+        if not tasks:
+            return 0
+
+        earliest = min(_ensure_aware(t.created_at) for t in tasks)
+        # Round down to the hour
+        cursor = earliest.replace(minute=0, second=0, microsecond=0)
+        one_hour = timedelta(hours=1)
+
+        count = 0
+        while cursor <= now:
+            snapshot = _compute_snapshot_at(tasks, cursor)
+            for metric_key, value in snapshot.items():
+                session.add(
+                    MetricsTrendPointModel(
+                        project_id=project_id,
+                        metric_key=metric_key,
+                        time_grain=MetricsTimeGrain.HOUR,
+                        time_bucket=cursor,
+                        value_numeric=value,
+                        value_json={},
+                        computed_at=now,
+                    )
+                )
+                count += 1
+            cursor += one_hour
+
+    return count
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -411,6 +530,14 @@ if __name__ == "__main__":
         description="Materialize metrics read-model for a project"
     )
     parser.add_argument("--project-id", required=True)
+    parser.add_argument(
+        "--backfill",
+        action="store_true",
+        help="Also generate hourly trend points from task history",
+    )
     args = parser.parse_args()
     result = materialize_metrics(args.project_id)
-    print(f"Materialized metrics: {result['summary_id']}")
+    print(f"Materialized summary: {result['summary_id']}")
+    if args.backfill:
+        n = backfill_hourly_trends(args.project_id)
+        print(f"Backfilled {n} hourly trend points")
