@@ -22,6 +22,11 @@ from app.models import (
     IntegrationResult,
     LeaseModel,
     LeaseStatus,
+    MetricsBreakdownPointModel,
+    MetricsDrilldownModel,
+    MetricsSummaryModel,
+    MetricsTimeGrain,
+    MetricsTrendPointModel,
     MilestoneModel,
     PhaseModel,
     PlanChangeSetModel,
@@ -1718,6 +1723,216 @@ class SqlStore:
                 invalid_claims,
                 invalid_reservations,
             )
+
+
+    # ------------------------------------------------------------------
+    # Metrics read-model queries (P5.M3.T1)
+    # ------------------------------------------------------------------
+
+    def get_metrics_summary(
+        self,
+        project_id: str,
+        timestamp: datetime | None = None,
+    ) -> dict[str, Any] | None:
+        with SessionLocal() as session:
+            query = (
+                select(MetricsSummaryModel)
+                .where(MetricsSummaryModel.project_id == project_id)
+            )
+            if timestamp is not None:
+                query = query.where(MetricsSummaryModel.captured_at <= timestamp)
+            query = query.order_by(MetricsSummaryModel.captured_at.desc()).limit(1)
+            row = session.execute(query).scalar_one_or_none()
+            if row is None:
+                return None
+            return {
+                "project_id": row.project_id,
+                "timestamp": _iso(row.captured_at),
+                "payload": row.payload,
+            }
+
+    def get_metrics_trends(
+        self,
+        project_id: str,
+        metric: str,
+        start_date: str,
+        end_date: str,
+        granularity: str = "day",
+        dimensions: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        with SessionLocal() as session:
+            start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+            end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+            # For date-only strings, ensure they are timezone-aware
+            if start_dt.tzinfo is None:
+                start_dt = start_dt.replace(tzinfo=timezone.utc)
+            if end_dt.tzinfo is None:
+                end_dt = end_dt.replace(tzinfo=timezone.utc)
+
+            grain_map = {
+                "hour": MetricsTimeGrain.HOUR,
+                "day": MetricsTimeGrain.DAY,
+                "week": MetricsTimeGrain.WEEK,
+                "month": MetricsTimeGrain.MONTH,
+            }
+            grain = grain_map.get(granularity, MetricsTimeGrain.DAY)
+
+            query = (
+                select(MetricsTrendPointModel)
+                .where(
+                    MetricsTrendPointModel.project_id == project_id,
+                    MetricsTrendPointModel.metric_key == metric,
+                    MetricsTrendPointModel.time_grain == grain,
+                    MetricsTrendPointModel.time_bucket >= start_dt,
+                    MetricsTrendPointModel.time_bucket < end_dt,
+                )
+                .order_by(MetricsTrendPointModel.time_bucket.asc())
+            )
+            rows = session.execute(query).scalars().all()
+            results: list[dict[str, Any]] = []
+            for row in rows:
+                point: dict[str, Any] = {
+                    "timestamp": _iso(row.time_bucket),
+                    "value": row.value_numeric if row.value_numeric is not None else 0,
+                }
+                if row.dimensions:
+                    point["dimensions"] = row.dimensions
+                if row.value_json:
+                    point["metadata"] = row.value_json
+                results.append(point)
+            return results
+
+    def get_metrics_breakdown(
+        self,
+        project_id: str,
+        metric: str,
+        dimension: str,
+        time_range: str = "7d",
+        filters: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        with SessionLocal() as session:
+            query = (
+                select(MetricsBreakdownPointModel)
+                .where(
+                    MetricsBreakdownPointModel.project_id == project_id,
+                    MetricsBreakdownPointModel.metric_key == metric,
+                    MetricsBreakdownPointModel.dimension_key == dimension,
+                )
+                .order_by(MetricsBreakdownPointModel.value_numeric.desc())
+            )
+            rows = session.execute(query).scalars().all()
+
+            total = sum(row.value_numeric or 0 for row in rows)
+            breakdown: list[dict[str, Any]] = []
+            for row in rows:
+                value = row.value_numeric or 0
+                pct = (row.value_json or {}).get("percentage", 0)
+                if pct == 0 and total > 0:
+                    pct = round(value / total * 100, 1)
+                item: dict[str, Any] = {
+                    "dimension_value": row.dimension_value,
+                    "value": value,
+                    "percentage": pct,
+                    "count": int((row.value_json or {}).get("count", 0)),
+                }
+                trend = (row.value_json or {}).get("trend")
+                if trend:
+                    item["trend"] = trend
+                breakdown.append(item)
+
+            return {
+                "total": total,
+                "breakdown": breakdown,
+            }
+
+    def get_metrics_drilldown(
+        self,
+        project_id: str,
+        metric: str,
+        filters: dict[str, Any] | None = None,
+        sort_by: str = "value",
+        sort_order: str = "desc",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        if limit > 500:
+            limit = 500
+
+        with SessionLocal() as session:
+            query = (
+                select(MetricsDrilldownModel)
+                .where(
+                    MetricsDrilldownModel.project_id == project_id,
+                    MetricsDrilldownModel.metric_key == metric,
+                )
+            )
+            all_rows = session.execute(query).scalars().all()
+            total = len(all_rows)
+
+            # Extract values from payloads for sorting and aggregation
+            enriched = []
+            all_values: list[float] = []
+            for row in all_rows:
+                p = row.payload or {}
+                val = float(p.get("value", 0))
+                all_values.append(val)
+                enriched.append((row, val))
+
+            # Sort
+            if sort_by == "timestamp":
+                enriched.sort(
+                    key=lambda x: (x[0].payload or {}).get("timestamp", ""),
+                    reverse=(sort_order == "desc"),
+                )
+            elif sort_by == "task_id":
+                enriched.sort(
+                    key=lambda x: (x[0].payload or {}).get("task_id", ""),
+                    reverse=(sort_order == "desc"),
+                )
+            else:  # value
+                enriched.sort(key=lambda x: x[1], reverse=(sort_order == "desc"))
+
+            # Paginate
+            page = enriched[offset: offset + limit]
+
+            items: list[dict[str, Any]] = []
+            for row, val in page:
+                p = row.payload or {}
+                items.append({
+                    "task_id": p.get("task_id", row.entity_id or ""),
+                    "task_title": p.get("task_title", ""),
+                    "value": val,
+                    "timestamp": p.get("timestamp", _iso(row.time_bucket) or ""),
+                    "context": p.get("context", {}),
+                    "contributing_factors": p.get("contributing_factors", []),
+                })
+
+            # Aggregation
+            if all_values:
+                sorted_vals = sorted(all_values)
+                n = len(sorted_vals)
+                agg = {
+                    "sum": round(sum(sorted_vals), 6),
+                    "avg": round(sum(sorted_vals) / n, 6),
+                    "min": sorted_vals[0],
+                    "max": sorted_vals[-1],
+                    "p50": sorted_vals[int(n * 0.5)] if n > 0 else 0,
+                    "p90": sorted_vals[min(int(n * 0.9), n - 1)] if n > 0 else 0,
+                    "p95": sorted_vals[min(int(n * 0.95), n - 1)] if n > 0 else 0,
+                }
+            else:
+                agg = {"sum": 0, "avg": 0, "min": 0, "max": 0, "p50": 0, "p90": 0, "p95": 0}
+
+            return {
+                "items": items,
+                "pagination": {
+                    "total": total,
+                    "limit": limit,
+                    "offset": offset,
+                    "has_more": (offset + limit) < total,
+                },
+                "aggregation": agg,
+            }
 
 
 STORE = SqlStore()

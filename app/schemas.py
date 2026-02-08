@@ -470,3 +470,86 @@ class ProjectGraphResponse(BaseModel):
     milestones: list[Milestone]
     tasks: list[GraphTask]
     dependencies: list[DependencyEdge]
+
+
+# ---------------------------------------------------------------------------
+# Metrics API Schemas (P5.M3.T1)
+# ---------------------------------------------------------------------------
+
+
+class MetricsSummaryResponse(BaseModel):
+    version: str = "1.0"
+    project_id: str
+    timestamp: str
+    metrics: dict[str, Any]
+
+
+class TrendDataPoint(BaseModel):
+    timestamp: str
+    value: float
+    dimensions: dict[str, str] | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class MetricsTrendsResponse(BaseModel):
+    version: str = "1.0"
+    project_id: str
+    metric: str
+    granularity: str
+    start_date: str
+    end_date: str
+    data: list[TrendDataPoint]
+
+
+class BreakdownItem(BaseModel):
+    dimension_value: str
+    value: float
+    percentage: float
+    count: int = 0
+    trend: dict[str, Any] | None = None
+
+
+class MetricsBreakdownResponse(BaseModel):
+    version: str = "1.0"
+    project_id: str
+    metric: str
+    dimension: str
+    time_range: str = "7d"
+    total: float = 0
+    breakdown: list[BreakdownItem]
+
+
+class DrilldownItemSchema(BaseModel):
+    task_id: str
+    task_title: str = ""
+    value: float = 0
+    timestamp: str = ""
+    context: dict[str, Any] = Field(default_factory=dict)
+    contributing_factors: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class PaginationSchema(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class AggregationSchema(BaseModel):
+    sum: float = 0
+    avg: float = 0
+    min: float = 0
+    max: float = 0
+    p50: float = 0
+    p90: float = 0
+    p95: float = 0
+
+
+class MetricsDrilldownResponse(BaseModel):
+    version: str = "1.0"
+    project_id: str
+    metric: str
+    filters_applied: dict[str, Any] = Field(default_factory=dict)
+    items: list[DrilldownItemSchema]
+    pagination: PaginationSchema
+    aggregation: AggregationSchema

@@ -1,6 +1,6 @@
 import pathlib
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -33,6 +33,10 @@ from app.schemas import (
     ListIntegrationAttemptsResponse,
     ListProjectsResponse,
     ListTasksResponse,
+    MetricsBreakdownResponse,
+    MetricsDrilldownResponse,
+    MetricsSummaryResponse,
+    MetricsTrendsResponse,
     PlanChangeset,
     PlanVersion,
     Project,
@@ -812,6 +816,186 @@ def apply_plan_changeset(changeset_id: str, payload: ApplyPlanChangesetRequest |
         plan_version=PlanVersion(**plan_version),
         invalidated_claim_task_ids=invalid_claims,
         invalidated_reservation_task_ids=invalid_reservations,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Metrics API endpoints (P5.M3.T1)
+# ---------------------------------------------------------------------------
+
+_API_VERSION_HEADER = "1.0"
+
+
+@app.get("/v1/metrics/summary", response_model=MetricsSummaryResponse)
+def get_metrics_summary(
+    response: Response,
+    project_id: str = Query(...),
+    timestamp: str | None = Query(None),
+) -> MetricsSummaryResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    ts = None
+    if timestamp is not None:
+        from datetime import datetime as dt
+        try:
+            ts = dt.fromisoformat(timestamp.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=ErrorResponse(
+                    error={"code": "BAD_REQUEST", "message": "Invalid timestamp format", "retryable": False}
+                ).model_dump(),
+            )
+    result = STORE.get_metrics_summary(project_id, timestamp=ts)
+    response.headers["X-API-Version"] = _API_VERSION_HEADER
+    if result is None:
+        return MetricsSummaryResponse(
+            project_id=project_id,
+            timestamp=timestamp or "",
+            metrics={},
+        )
+    return MetricsSummaryResponse(
+        project_id=result["project_id"],
+        timestamp=result["timestamp"] or "",
+        metrics=result["payload"] or {},
+    )
+
+
+@app.get("/v1/metrics/trends", response_model=MetricsTrendsResponse)
+def get_metrics_trends(
+    response: Response,
+    project_id: str = Query(...),
+    metric: str = Query(...),
+    start_date: str = Query(...),
+    end_date: str = Query(...),
+    granularity: str = Query("day"),
+    dimensions: str | None = Query(None),
+) -> MetricsTrendsResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    dim_list = [d.strip() for d in dimensions.split(",") if d.strip()] if dimensions else []
+    data = STORE.get_metrics_trends(
+        project_id=project_id,
+        metric=metric,
+        start_date=start_date,
+        end_date=end_date,
+        granularity=granularity,
+        dimensions=dim_list or None,
+    )
+    response.headers["X-API-Version"] = _API_VERSION_HEADER
+    return MetricsTrendsResponse(
+        project_id=project_id,
+        metric=metric,
+        granularity=granularity,
+        start_date=start_date,
+        end_date=end_date,
+        data=data,
+    )
+
+
+@app.get("/v1/metrics/breakdown", response_model=MetricsBreakdownResponse)
+def get_metrics_breakdown(
+    response: Response,
+    project_id: str = Query(...),
+    metric: str = Query(...),
+    dimension: str = Query(...),
+    time_range: str = Query("7d"),
+    filters: str | None = Query(None),
+) -> MetricsBreakdownResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    filter_dict = None
+    if filters:
+        import json
+        try:
+            filter_dict = json.loads(filters)
+        except json.JSONDecodeError:
+            raise HTTPException(
+                status_code=400,
+                detail=ErrorResponse(
+                    error={"code": "BAD_REQUEST", "message": "Invalid filters JSON", "retryable": False}
+                ).model_dump(),
+            )
+    result = STORE.get_metrics_breakdown(
+        project_id=project_id,
+        metric=metric,
+        dimension=dimension,
+        time_range=time_range,
+        filters=filter_dict,
+    )
+    response.headers["X-API-Version"] = _API_VERSION_HEADER
+    return MetricsBreakdownResponse(
+        project_id=project_id,
+        metric=metric,
+        dimension=dimension,
+        time_range=time_range,
+        total=result["total"],
+        breakdown=result["breakdown"],
+    )
+
+
+@app.get("/v1/metrics/drilldown", response_model=MetricsDrilldownResponse)
+def get_metrics_drilldown(
+    response: Response,
+    project_id: str = Query(...),
+    metric: str = Query(...),
+    filters: str | None = Query(None),
+    sort_by: str = Query("value"),
+    sort_order: str = Query("desc"),
+    limit: int = Query(50),
+    offset: int = Query(0),
+) -> MetricsDrilldownResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    filter_dict = None
+    if filters:
+        import json
+        try:
+            filter_dict = json.loads(filters)
+        except json.JSONDecodeError:
+            raise HTTPException(
+                status_code=400,
+                detail=ErrorResponse(
+                    error={"code": "BAD_REQUEST", "message": "Invalid filters JSON", "retryable": False}
+                ).model_dump(),
+            )
+    result = STORE.get_metrics_drilldown(
+        project_id=project_id,
+        metric=metric,
+        filters=filter_dict,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        limit=limit,
+        offset=offset,
+    )
+    response.headers["X-API-Version"] = _API_VERSION_HEADER
+    return MetricsDrilldownResponse(
+        project_id=project_id,
+        metric=metric,
+        filters_applied=filter_dict or {},
+        items=result["items"],
+        pagination=result["pagination"],
+        aggregation=result["aggregation"],
     )
 
 
