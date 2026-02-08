@@ -242,6 +242,18 @@ REQUIRED_SCHEMA: dict[str, set[str]] = {
         "created_at",
         "completed_at",
     },
+    "metrics_alert": {
+        "id",
+        "project_id",
+        "metric_key",
+        "alert_type",
+        "severity",
+        "value",
+        "threshold",
+        "context",
+        "created_at",
+        "acknowledged_at",
+    },
 }
 
 

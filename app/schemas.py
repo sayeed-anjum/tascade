@@ -553,3 +553,30 @@ class MetricsDrilldownResponse(BaseModel):
     items: list[DrilldownItemSchema]
     pagination: PaginationSchema
     aggregation: AggregationSchema
+
+
+# ---------------------------------------------------------------------------
+# Metrics Alerting Schemas (P5.M3.T4)
+# ---------------------------------------------------------------------------
+
+
+class MetricsAlertSchema(BaseModel):
+    id: str
+    project_id: str
+    metric_key: str
+    alert_type: Literal["threshold", "anomaly"]
+    severity: Literal["warning", "critical", "emergency"]
+    value: float
+    threshold: float | None = None
+    context: dict[str, Any] = Field(default_factory=dict)
+    created_at: str
+    acknowledged_at: str | None = None
+
+
+class MetricsAlertListResponse(BaseModel):
+    items: list[MetricsAlertSchema]
+
+
+class AcknowledgeAlertResponse(BaseModel):
+    id: str
+    acknowledged_at: str

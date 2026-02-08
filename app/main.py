@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.schemas import (
+    AcknowledgeAlertResponse,
     ApplyPlanChangesetRequest,
     ApplyPlanChangesetResponse,
     Artifact,
@@ -33,6 +34,8 @@ from app.schemas import (
     ListIntegrationAttemptsResponse,
     ListProjectsResponse,
     ListTasksResponse,
+    MetricsAlertListResponse,
+    MetricsAlertSchema,
     MetricsBreakdownResponse,
     MetricsDrilldownResponse,
     MetricsSummaryResponse,
@@ -997,6 +1000,64 @@ def get_metrics_drilldown(
         pagination=result["pagination"],
         aggregation=result["aggregation"],
     )
+
+
+# ---------------------------------------------------------------------------
+# Metrics Alerting endpoints (P5.M3.T4)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/v1/metrics/alerts", response_model=MetricsAlertListResponse)
+def list_metrics_alerts(
+    response: Response,
+    project_id: str = Query(...),
+    severity: str | None = Query(None),
+    acknowledged: str | None = Query(None),
+    limit: int = Query(50),
+) -> MetricsAlertListResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    if severity is not None and severity not in {"warning", "critical", "emergency"}:
+        raise HTTPException(
+            status_code=400,
+            detail=ErrorResponse(
+                error={"code": "BAD_REQUEST", "message": "Invalid severity filter", "retryable": False}
+            ).model_dump(),
+        )
+    ack_filter: bool | None = None
+    if acknowledged is not None:
+        ack_filter = acknowledged.lower() in ("true", "1", "yes")
+    items = STORE.list_alerts(
+        project_id=project_id,
+        acknowledged=ack_filter,
+        severity=severity,
+        limit=limit,
+    )
+    response.headers["X-API-Version"] = _API_VERSION_HEADER
+    return MetricsAlertListResponse(items=[MetricsAlertSchema(**item) for item in items])
+
+
+@app.post("/v1/metrics/alerts/{alert_id}/acknowledge", response_model=AcknowledgeAlertResponse)
+def acknowledge_alert(
+    alert_id: str,
+    response: Response,
+) -> AcknowledgeAlertResponse:
+    try:
+        result = STORE.acknowledge_alert(alert_id)
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "ALERT_NOT_FOUND", "message": "Alert not found", "retryable": False}
+            ).model_dump(),
+        )
+    response.headers["X-API-Version"] = _API_VERSION_HEADER
+    return AcknowledgeAlertResponse(id=result["id"], acknowledged_at=result["acknowledged_at"])
 
 
 # ---------------------------------------------------------------------------

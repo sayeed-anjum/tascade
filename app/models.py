@@ -7,6 +7,7 @@ from uuid import uuid4
 from sqlalchemy import (
     DateTime,
     Enum as SAEnum,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -710,3 +711,22 @@ class MetricsJobRunModel(Base):
         DateTime, nullable=False, default=_utcnow
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class MetricsAlertModel(Base):
+    __tablename__ = "metrics_alert"
+
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    metric_key: Mapped[str] = mapped_column(Text, nullable=False)
+    alert_type: Mapped[str] = mapped_column(Text, nullable=False)
+    severity: Mapped[str] = mapped_column(Text, nullable=False)
+    value: Mapped[float] = mapped_column(Float, nullable=False)
+    threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+    context: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

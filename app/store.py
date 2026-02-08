@@ -22,6 +22,7 @@ from app.models import (
     IntegrationResult,
     LeaseModel,
     LeaseStatus,
+    MetricsAlertModel,
     MetricsBreakdownPointModel,
     MetricsDrilldownModel,
     MetricsSummaryModel,
@@ -1933,6 +1934,83 @@ class SqlStore:
                 },
                 "aggregation": agg,
             }
+
+
+    # ------------------------------------------------------------------
+    # Metrics Alerting (P5.M3.T4)
+    # ------------------------------------------------------------------
+
+    def create_alert(
+        self,
+        project_id: str,
+        metric_key: str,
+        alert_type: str,
+        severity: str,
+        value: float,
+        threshold: float | None,
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        with SessionLocal.begin() as session:
+            alert = MetricsAlertModel(
+                project_id=project_id,
+                metric_key=metric_key,
+                alert_type=alert_type,
+                severity=severity,
+                value=value,
+                threshold=threshold,
+                context=context or {},
+                created_at=_now(),
+            )
+            session.add(alert)
+            session.flush()
+            return _alert_to_dict(alert)
+
+    def list_alerts(
+        self,
+        project_id: str,
+        acknowledged: bool | None = None,
+        severity: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        with SessionLocal() as session:
+            query = (
+                select(MetricsAlertModel)
+                .where(MetricsAlertModel.project_id == project_id)
+            )
+            if acknowledged is not None:
+                if acknowledged:
+                    query = query.where(MetricsAlertModel.acknowledged_at.isnot(None))
+                else:
+                    query = query.where(MetricsAlertModel.acknowledged_at.is_(None))
+            if severity is not None:
+                query = query.where(MetricsAlertModel.severity == severity)
+            query = query.order_by(MetricsAlertModel.created_at.desc()).limit(limit)
+            rows = session.execute(query).scalars().all()
+            return [_alert_to_dict(row) for row in rows]
+
+    def acknowledge_alert(self, alert_id: str) -> dict[str, Any]:
+        with SessionLocal.begin() as session:
+            alert = session.get(MetricsAlertModel, alert_id)
+            if alert is None:
+                raise KeyError("ALERT_NOT_FOUND")
+            alert.acknowledged_at = _now()
+            session.flush()
+            return _alert_to_dict(alert)
+
+
+def _alert_to_dict(model: MetricsAlertModel) -> dict[str, Any]:
+    return {
+        "id": model.id,
+        "project_id": model.project_id,
+        "metric_key": model.metric_key,
+        "alert_type": model.alert_type,
+        "severity": model.severity,
+        "value": model.value,
+        "threshold": model.threshold,
+        "context": model.context or {},
+        "created_at": _iso(model.created_at),
+        "acknowledged_at": _iso(model.acknowledged_at),
+    }
 
 
 STORE = SqlStore()
