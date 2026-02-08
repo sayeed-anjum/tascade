@@ -1,4 +1,7 @@
+import json
 import pathlib
+from datetime import datetime
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.responses import FileResponse, JSONResponse
@@ -846,9 +849,8 @@ def get_metrics_summary(
         )
     ts = None
     if timestamp is not None:
-        from datetime import datetime as dt
         try:
-            ts = dt.fromisoformat(timestamp.replace("Z", "+00:00"))
+            ts = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
         except ValueError:
             raise HTTPException(
                 status_code=400,
@@ -878,7 +880,7 @@ def get_metrics_trends(
     metric: str = Query(...),
     start_date: str = Query(...),
     end_date: str = Query(...),
-    granularity: str = Query("day"),
+    granularity: Literal["hour", "day", "week", "month"] = Query("day"),
     dimensions: str | None = Query(None),
 ) -> MetricsTrendsResponse:
     if not STORE.project_exists(project_id):
@@ -914,7 +916,7 @@ def get_metrics_breakdown(
     project_id: str = Query(...),
     metric: str = Query(...),
     dimension: str = Query(...),
-    time_range: str = Query("7d"),
+    time_range: Literal["24h", "7d", "30d", "90d"] = Query("7d"),
     filters: str | None = Query(None),
 ) -> MetricsBreakdownResponse:
     if not STORE.project_exists(project_id):
@@ -926,7 +928,6 @@ def get_metrics_breakdown(
         )
     filter_dict = None
     if filters:
-        import json
         try:
             filter_dict = json.loads(filters)
         except json.JSONDecodeError:
@@ -960,8 +961,8 @@ def get_metrics_drilldown(
     project_id: str = Query(...),
     metric: str = Query(...),
     filters: str | None = Query(None),
-    sort_by: str = Query("value"),
-    sort_order: str = Query("desc"),
+    sort_by: Literal["value", "timestamp", "task_id"] = Query("value"),
+    sort_order: Literal["asc", "desc"] = Query("desc"),
     limit: int = Query(50),
     offset: int = Query(0),
 ) -> MetricsDrilldownResponse:
@@ -974,7 +975,6 @@ def get_metrics_drilldown(
         )
     filter_dict = None
     if filters:
-        import json
         try:
             filter_dict = json.loads(filters)
         except json.JSONDecodeError:

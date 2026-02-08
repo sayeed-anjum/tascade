@@ -1803,6 +1803,13 @@ class SqlStore:
                 results.append(point)
             return results
 
+    _TIME_RANGE_MAP: dict[str, timedelta] = {
+        "24h": timedelta(hours=24),
+        "7d": timedelta(days=7),
+        "30d": timedelta(days=30),
+        "90d": timedelta(days=90),
+    }
+
     def get_metrics_breakdown(
         self,
         project_id: str,
@@ -1819,8 +1826,15 @@ class SqlStore:
                     MetricsBreakdownPointModel.metric_key == metric,
                     MetricsBreakdownPointModel.dimension_key == dimension,
                 )
-                .order_by(MetricsBreakdownPointModel.value_numeric.desc())
             )
+
+            # Filter by time_range if provided and recognized
+            td = self._TIME_RANGE_MAP.get(time_range)
+            if td is not None:
+                cutoff = _now() - td
+                query = query.where(MetricsBreakdownPointModel.time_bucket >= cutoff)
+
+            query = query.order_by(MetricsBreakdownPointModel.value_numeric.desc())
             rows = session.execute(query).scalars().all()
 
             total = sum(row.value_numeric or 0 for row in rows)
@@ -1860,69 +1874,87 @@ class SqlStore:
             limit = 500
 
         with SessionLocal() as session:
-            query = (
-                select(MetricsDrilldownModel)
-                .where(
-                    MetricsDrilldownModel.project_id == project_id,
-                    MetricsDrilldownModel.metric_key == metric,
+            # Build base WHERE conditions
+            conditions = [
+                MetricsDrilldownModel.project_id == project_id,
+                MetricsDrilldownModel.metric_key == metric,
+            ]
+
+            # Apply filters against known columns (metric_key, entity_type)
+            if filters:
+                if "metric_key" in filters:
+                    conditions.append(MetricsDrilldownModel.metric_key == filters["metric_key"])
+                if "entity_type" in filters:
+                    conditions.append(MetricsDrilldownModel.entity_type == filters["entity_type"])
+
+            # Count total via separate query
+            count_query = select(func.count()).select_from(MetricsDrilldownModel).where(*conditions)
+            total = session.execute(count_query).scalar_one()
+
+            # Aggregation via SQL aggregate functions
+            agg_query = select(
+                func.sum(MetricsDrilldownModel.payload["value"].as_float()),
+                func.avg(MetricsDrilldownModel.payload["value"].as_float()),
+                func.min(MetricsDrilldownModel.payload["value"].as_float()),
+                func.max(MetricsDrilldownModel.payload["value"].as_float()),
+            ).where(*conditions)
+
+            try:
+                agg_row = session.execute(agg_query).one()
+                agg_sum = agg_row[0]
+            except Exception:
+                agg_sum = None
+
+            if agg_sum is not None:
+                agg = {
+                    "sum": round(float(agg_row[0] or 0), 6),
+                    "avg": round(float(agg_row[1] or 0), 6),
+                    "min": float(agg_row[2] or 0),
+                    "max": float(agg_row[3] or 0),
+                }
+                # Percentiles: fetch only values for the matching subset
+                val_query = (
+                    select(MetricsDrilldownModel.payload)
+                    .where(*conditions)
+                    .order_by(MetricsDrilldownModel.payload["value"].as_float().asc())
                 )
-            )
-            all_rows = session.execute(query).scalars().all()
-            total = len(all_rows)
+                val_rows = session.execute(val_query).scalars().all()
+                sorted_vals = [float((p or {}).get("value", 0)) for p in val_rows]
+                n = len(sorted_vals)
+                agg["p50"] = sorted_vals[int(n * 0.5)] if n > 0 else 0
+                agg["p90"] = sorted_vals[min(int(n * 0.9), n - 1)] if n > 0 else 0
+                agg["p95"] = sorted_vals[min(int(n * 0.95), n - 1)] if n > 0 else 0
+            else:
+                agg = {"sum": 0, "avg": 0, "min": 0, "max": 0, "p50": 0, "p90": 0, "p95": 0}
 
-            # Extract values from payloads for sorting and aggregation
-            enriched = []
-            all_values: list[float] = []
-            for row in all_rows:
-                p = row.payload or {}
-                val = float(p.get("value", 0))
-                all_values.append(val)
-                enriched.append((row, val))
+            # Build paginated query with ORDER BY, LIMIT, OFFSET pushed to SQL
+            data_query = select(MetricsDrilldownModel).where(*conditions)
 
-            # Sort
+            order_dir = MetricsDrilldownModel.payload["value"].as_float().desc()
             if sort_by == "timestamp":
-                enriched.sort(
-                    key=lambda x: (x[0].payload or {}).get("timestamp", ""),
-                    reverse=(sort_order == "desc"),
-                )
+                col = MetricsDrilldownModel.time_bucket
+                order_dir = col.desc() if sort_order == "desc" else col.asc()
             elif sort_by == "task_id":
-                enriched.sort(
-                    key=lambda x: (x[0].payload or {}).get("task_id", ""),
-                    reverse=(sort_order == "desc"),
-                )
+                col = MetricsDrilldownModel.entity_id
+                order_dir = col.desc() if sort_order == "desc" else col.asc()
             else:  # value
-                enriched.sort(key=lambda x: x[1], reverse=(sort_order == "desc"))
+                col_expr = MetricsDrilldownModel.payload["value"].as_float()
+                order_dir = col_expr.desc() if sort_order == "desc" else col_expr.asc()
 
-            # Paginate
-            page = enriched[offset: offset + limit]
+            data_query = data_query.order_by(order_dir).limit(limit).offset(offset)
+            rows = session.execute(data_query).scalars().all()
 
             items: list[dict[str, Any]] = []
-            for row, val in page:
+            for row in rows:
                 p = row.payload or {}
                 items.append({
                     "task_id": p.get("task_id", row.entity_id or ""),
                     "task_title": p.get("task_title", ""),
-                    "value": val,
+                    "value": float(p.get("value", 0)),
                     "timestamp": p.get("timestamp", _iso(row.time_bucket) or ""),
                     "context": p.get("context", {}),
                     "contributing_factors": p.get("contributing_factors", []),
                 })
-
-            # Aggregation
-            if all_values:
-                sorted_vals = sorted(all_values)
-                n = len(sorted_vals)
-                agg = {
-                    "sum": round(sum(sorted_vals), 6),
-                    "avg": round(sum(sorted_vals) / n, 6),
-                    "min": sorted_vals[0],
-                    "max": sorted_vals[-1],
-                    "p50": sorted_vals[int(n * 0.5)] if n > 0 else 0,
-                    "p90": sorted_vals[min(int(n * 0.9), n - 1)] if n > 0 else 0,
-                    "p95": sorted_vals[min(int(n * 0.95), n - 1)] if n > 0 else 0,
-                }
-            else:
-                agg = {"sum": 0, "avg": 0, "min": 0, "max": 0, "p50": 0, "p90": 0, "p95": 0}
 
             return {
                 "items": items,
