@@ -1,0 +1,35 @@
+{
+  "dataset_id": "golden-critical-metrics-v1",
+  "description": "Critical north-star metric truth table for reconciliation harness",
+  "cases": [
+    {
+      "case_id": "dpi-baseline",
+      "metric": "NS-1",
+      "inputs": {
+        "schedule_reliability": 0.5,
+        "cycle_time_stability": 0.61,
+        "blocker_resolution_rate": 0.75
+      },
+      "expected_output": 0.601
+    },
+    {
+      "case_id": "fes-baseline",
+      "metric": "NS-2",
+      "inputs": {
+        "active_work_time": 16,
+        "wait_time": 14,
+        "blocked_time": 0
+      },
+      "expected_output": 0.533333
+    },
+    {
+      "case_id": "irs-baseline",
+      "metric": "NS-3",
+      "inputs": {
+        "success_rate": 0.85,
+        "recovery_speed_score": 0.833333
+      },
+      "expected_output": 0.843333
+    }
+  ]
+}
