@@ -2981,6 +2981,9 @@ class DQValidator:
         for table in tables_to_validate:
             if not self._table_exists(table):
                 continue
+            table_spec = self.table_specs.get(table)
+            if table_spec is None:
+                continue
             total = self._get_count(f"SELECT COUNT(*) FROM {table}")
             violations: list[DQViolation] = []
             for rule in rules_by_table.get(table, []):
@@ -2992,7 +2995,7 @@ class DQValidator:
                 count = self._rule_count(rule)
                 if count <= 0:
                     continue
-                key_columns = self.table_specs[table].key_columns
+                key_columns = table_spec.key_columns
                 record_query = self._rule_record_query(rule, key_columns)
                 rows = self._execute_query(f"{record_query} LIMIT {self.sample_size}")
                 sample_ids = self._format_sample_ids(key_columns, rows)
@@ -3042,7 +3045,7 @@ class DQEnforcer:
         self._execute(
             """
             CREATE TABLE IF NOT EXISTS dq_violations (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                id TEXT PRIMARY KEY,
                 run_id UUID NOT NULL,
                 table_name TEXT NOT NULL,
                 rule_id TEXT NOT NULL,
@@ -3059,7 +3062,7 @@ class DQEnforcer:
         self._execute(
             """
             CREATE TABLE IF NOT EXISTS dq_record_flags (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                id TEXT PRIMARY KEY,
                 run_id UUID NOT NULL,
                 table_name TEXT NOT NULL,
                 record_key JSONB NOT NULL,
@@ -3080,7 +3083,7 @@ class DQEnforcer:
         self._execute(
             """
             CREATE TABLE IF NOT EXISTS dq_quarantine (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                id TEXT PRIMARY KEY,
                 run_id UUID NOT NULL,
                 table_name TEXT NOT NULL,
                 rule_id TEXT NOT NULL,
@@ -3109,6 +3112,7 @@ class DQEnforcer:
         self._execute(
             """
             INSERT INTO dq_violations (
+                id,
                 run_id,
                 table_name,
                 rule_id,
@@ -3119,6 +3123,7 @@ class DQEnforcer:
                 total_checked,
                 sample_ids
             ) VALUES (
+                :id,
                 :run_id,
                 :table_name,
                 :rule_id,
@@ -3127,10 +3132,11 @@ class DQEnforcer:
                 :description,
                 :violation_count,
                 :total_checked,
-                :sample_ids::jsonb
+                CAST(:sample_ids AS JSONB)
             );
             """,
             {
+                "id": str(uuid.uuid4()),
                 "run_id": self.run_id,
                 "table_name": result.table,
                 "rule_id": rule.rule_id,
@@ -3159,19 +3165,29 @@ class DQEnforcer:
         self._execute(
             f"""
             INSERT INTO dq_record_flags (
-                run_id, table_name, record_key, rule_id, severity, kind, reason
+                id, run_id, table_name, record_key, rule_id, severity, kind, reason
             )
             SELECT
-                '{self.run_id}',
-                '{table_spec.table}',
+                :id,
+                :run_id,
+                :table_name,
                 {record_key_expression},
-                '{rule.rule_id}',
-                '{rule.severity}',
-                '{rule.kind}',
-                '{rule.description}'
+                :rule_id,
+                :severity,
+                :kind,
+                :reason
             FROM ({record_query}) dq
             ON CONFLICT DO NOTHING;
-            """
+            """,
+            {
+                "id": str(uuid.uuid4()),
+                "run_id": self.run_id,
+                "table_name": table_spec.table,
+                "rule_id": rule.rule_id,
+                "severity": rule.severity,
+                "kind": rule.kind,
+                "reason": rule.description,
+            },
         )
 
         columns = {col["name"] for col in self.inspector.get_columns(table_spec.table)}
@@ -3221,13 +3237,14 @@ class DQEnforcer:
         self._execute(
             """
             INSERT INTO dq_quarantine (
-                run_id, table_name, rule_id, severity, kind, reason, violation_ratio
+                id, run_id, table_name, rule_id, severity, kind, reason, violation_ratio
             ) VALUES (
-                :run_id, :table_name, :rule_id, :severity, :kind, :reason, :ratio
+                :id, :run_id, :table_name, :rule_id, :severity, :kind, :reason, :ratio
             )
             ON CONFLICT DO NOTHING;
             """,
             {
+                "id": str(uuid.uuid4()),
                 "run_id": self.run_id,
                 "table_name": result.table,
                 "rule_id": rule.rule_id,
@@ -3360,6 +3377,9 @@ def main():
     )
 
     args = parser.parse_args()
+
+    if args.enforce and not args.fail_on_error and not args.fail_on_critical:
+        args.fail_on_critical = True
 
     # Determine severity filter
     severity_filter = None
