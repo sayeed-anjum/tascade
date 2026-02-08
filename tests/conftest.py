@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 os.environ.setdefault("TASCADE_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+os.environ.setdefault("TASCADE_AUTH_DISABLED", "1")
 
 from app.store import STORE
 
