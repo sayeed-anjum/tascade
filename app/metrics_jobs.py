@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, select
 
 from app.db import SessionLocal
 from app.models import (
@@ -101,51 +101,62 @@ class MetricsIncrementalJobRunner:
                     checkpoint.last_event_id = replay_from_event_id - 1
 
                 start_event_id = checkpoint.last_event_id + 1
-                events = (
-                    session.execute(
-                        select(EventLogModel)
-                        .where(
-                            EventLogModel.project_id == project_id,
-                            EventLogModel.entity_type == "task",
-                            EventLogModel.event_type == "task_state_transitioned",
-                            EventLogModel.id >= start_event_id,
-                        )
-                        .order_by(EventLogModel.id.asc())
-                        .limit(schedule.max_events_per_run)
+                events = session.execute(
+                    select(EventLogModel.id, EventLogModel.payload)
+                    .where(
+                        EventLogModel.project_id == project_id,
+                        EventLogModel.entity_type == "task",
+                        EventLogModel.event_type == "task_state_transitioned",
+                        EventLogModel.id >= start_event_id,
                     )
-                    .scalars()
-                    .all()
-                )
+                    .order_by(EventLogModel.id.asc())
+                    .limit(schedule.max_events_per_run)
+                ).all()
 
-                counters: dict[TaskState, MetricsStateTransitionCounterModel] = {
-                    row.task_state: row
-                    for row in session.execute(
-                        select(MetricsStateTransitionCounterModel).where(
-                            MetricsStateTransitionCounterModel.project_id == project_id
-                        )
-                    )
-                    .scalars()
-                    .all()
-                }
-
+                state_aggregates: dict[TaskState, tuple[int, int]] = {}
                 processed_events = 0
                 end_event_id = start_event_id - 1
-                for event in events:
-                    to_state = self._event_to_state(event)
-                    counter = counters.get(to_state)
+                for event_id, payload in events:
+                    to_state = self._payload_to_state(payload)
+                    count, max_event_id = state_aggregates.get(to_state, (0, 0))
+                    state_aggregates[to_state] = (
+                        count + 1,
+                        max(max_event_id, event_id),
+                    )
+                    processed_events += 1
+                    end_event_id = event_id
+
+                existing_counters: dict[
+                    TaskState, MetricsStateTransitionCounterModel
+                ] = {}
+                if state_aggregates:
+                    existing_counters = {
+                        row.task_state: row
+                        for row in session.execute(
+                            select(MetricsStateTransitionCounterModel).where(
+                                MetricsStateTransitionCounterModel.project_id
+                                == project_id,
+                                MetricsStateTransitionCounterModel.task_state.in_(
+                                    list(state_aggregates)
+                                ),
+                            )
+                        )
+                        .scalars()
+                        .all()
+                    }
+
+                for state, (count, max_event_id) in state_aggregates.items():
+                    counter = existing_counters.get(state)
                     if counter is None:
                         counter = MetricsStateTransitionCounterModel(
                             project_id=project_id,
-                            task_state=to_state,
+                            task_state=state,
                             transition_count=0,
                             last_event_id=0,
                         )
                         session.add(counter)
-                        counters[to_state] = counter
-                    counter.transition_count += 1
-                    counter.last_event_id = max(counter.last_event_id, event.id)
-                    processed_events += 1
-                    end_event_id = event.id
+                    counter.transition_count += count
+                    counter.last_event_id = max(counter.last_event_id, max_event_id)
 
                 if processed_events > 0:
                     checkpoint.last_event_id = end_event_id
@@ -290,8 +301,9 @@ class MetricsIncrementalJobRunner:
                 "schedule": self.describe_schedule(run.mode),
             }
 
-    def _event_to_state(self, event: EventLogModel) -> TaskState:
-        payload = event.payload or {}
+    def _payload_to_state(self, payload: object) -> TaskState:
+        if not isinstance(payload, dict):
+            raise ValueError("INVALID_EVENT_PAYLOAD")
         to_state = payload.get("to_state")
         if not isinstance(to_state, str):
             raise ValueError("INVALID_EVENT_PAYLOAD")

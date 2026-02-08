@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     Enum as SAEnum,
     ForeignKey,
+    Index,
     Integer,
     JSON,
     String,
@@ -604,6 +605,15 @@ class GateCandidateLinkModel(Base):
 
 class EventLogModel(Base):
     __tablename__ = "event_log"
+    __table_args__ = (
+        Index(
+            "ix_event_log_metrics_cursor",
+            "project_id",
+            "entity_type",
+            "event_type",
+            "id",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     project_id: Mapped[str] = mapped_column(
