@@ -26,8 +26,8 @@ This document provides the canonical technical specification for computing all 1
 |---------|---------|
 | 2. Formula Reference Table | Quick reference for all metric computations |
 | 3. North Star Metrics | Detailed specs for NS-1 through NS-5 |
-| 4. Operational Metrics | Detailed specs for OP-1 through OP-12 (in-scope) |
-| 5. Actionability Metrics | Detailed specs for ACT-1 through ACT-8 (in-scope) |
+| 4. Operational Metrics | Detailed specs for OP-1 through OP-6, OP-9, OP-12 (in-scope) |
+| 5. Actionability Metrics | Detailed specs for ACT-2, ACT-6, ACT-7 (in-scope) |
 | 6. Dimension Specifications | Available dimensions and drill-down paths |
 | 7. SLA Targets | Performance benchmarks by metric |
 | 8. Edge Case Handling | Null handling, division by zero, etc. |
