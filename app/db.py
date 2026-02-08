@@ -30,7 +30,9 @@ def _engine_kwargs(url: str) -> dict:
 
 DATABASE_URL = _database_url()
 ENGINE = create_engine(DATABASE_URL, future=True, **_engine_kwargs(DATABASE_URL))
-SessionLocal = sessionmaker(bind=ENGINE, autoflush=False, autocommit=False, expire_on_commit=False)
+SessionLocal = sessionmaker(
+    bind=ENGINE, autoflush=False, autocommit=False, expire_on_commit=False
+)
 
 
 REQUIRED_SCHEMA: dict[str, set[str]] = {
@@ -47,7 +49,14 @@ REQUIRED_SCHEMA: dict[str, set[str]] = {
         "created_at",
         "updated_at",
     },
-    "dependency_edge": {"id", "project_id", "from_task_id", "to_task_id", "unlock_on", "created_at"},
+    "dependency_edge": {
+        "id",
+        "project_id",
+        "from_task_id",
+        "to_task_id",
+        "unlock_on",
+        "created_at",
+    },
     "lease": {
         "id",
         "project_id",
@@ -158,6 +167,38 @@ REQUIRED_SCHEMA: dict[str, set[str]] = {
         "candidate_order",
         "created_at",
     },
+    "metrics_job_checkpoint": {
+        "id",
+        "project_id",
+        "mode",
+        "last_event_id",
+        "last_success_at",
+        "created_at",
+        "updated_at",
+    },
+    "metrics_state_transition_counter": {
+        "id",
+        "project_id",
+        "task_state",
+        "transition_count",
+        "last_event_id",
+        "created_at",
+        "updated_at",
+    },
+    "metrics_job_run": {
+        "id",
+        "project_id",
+        "mode",
+        "status",
+        "idempotency_key",
+        "replay_from_event_id",
+        "start_event_id",
+        "end_event_id",
+        "processed_events",
+        "failure_reason",
+        "created_at",
+        "completed_at",
+    },
 }
 
 
@@ -193,7 +234,9 @@ def _migration_sql_files() -> list[Path]:
 def _postgres_conninfo_for_psql(database_url: str) -> str:
     parsed = make_url(database_url)
     if not parsed.drivername.startswith("postgresql"):
-        raise RuntimeError(f"Non-Postgres URL cannot be migrated with psql: {database_url}")
+        raise RuntimeError(
+            f"Non-Postgres URL cannot be migrated with psql: {database_url}"
+        )
     conninfo = parsed.set(drivername="postgresql")
     return conninfo.render_as_string(hide_password=False)
 
@@ -304,9 +347,13 @@ def verify_schema(engine: Engine, required: dict[str, set[str]] | None = None) -
     missing_columns: list[str] = []
     for table_name, required_columns in required_schema.items():
         if table_name not in existing_tables:
-            missing_columns.extend(f"{table_name}.{column}" for column in sorted(required_columns))
+            missing_columns.extend(
+                f"{table_name}.{column}" for column in sorted(required_columns)
+            )
             continue
-        existing_columns = {column["name"] for column in inspector.get_columns(table_name)}
+        existing_columns = {
+            column["name"] for column in inspector.get_columns(table_name)
+        }
         for required_column in sorted(required_columns):
             if required_column not in existing_columns:
                 missing_columns.append(f"{table_name}.{required_column}")

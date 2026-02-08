@@ -4,7 +4,17 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, Uuid
+from sqlalchemy import (
+    DateTime,
+    Enum as SAEnum,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -103,6 +113,16 @@ class GateDecisionOutcome(str, Enum):
     APPROVED_WITH_RISK = "approved_with_risk"
 
 
+class MetricsJobMode(str, Enum):
+    BATCH = "batch"
+    NEAR_REAL_TIME = "near_real_time"
+
+
+class MetricsJobStatus(str, Enum):
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
 UUID_TEXT = Uuid(as_uuid=False)
 TEXT_LIST = JSON().with_variant(ARRAY(Text), "postgresql")
 JSON_LIST = JSON().with_variant(JSONB, "postgresql")
@@ -119,10 +139,16 @@ class ProjectModel(Base):
     org_id: Mapped[str | None] = mapped_column(UUID_TEXT, nullable=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[ProjectStatus] = mapped_column(
-        SAEnum(ProjectStatus, values_callable=_enum_values), nullable=False, default=ProjectStatus.ACTIVE
+        SAEnum(ProjectStatus, values_callable=_enum_values),
+        nullable=False,
+        default=ProjectStatus.ACTIVE,
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, nullable=False
+    )
 
 
 class PhaseModel(Base):
@@ -136,8 +162,12 @@ class PhaseModel(Base):
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     phase_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     short_id: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, nullable=False
+    )
 
 
 class MilestoneModel(Base):
@@ -154,8 +184,12 @@ class MilestoneModel(Base):
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     milestone_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     short_id: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, nullable=False
+    )
 
 
 class TaskModel(Base):
@@ -172,22 +206,42 @@ class TaskModel(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     state: Mapped[TaskState] = mapped_column(
-        SAEnum(TaskState, values_callable=_enum_values), nullable=False, default=TaskState.BACKLOG
+        SAEnum(TaskState, values_callable=_enum_values),
+        nullable=False,
+        default=TaskState.BACKLOG,
     )
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
     work_spec: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     task_class: Mapped[TaskClass] = mapped_column(
-        SAEnum(TaskClass, values_callable=_enum_values), nullable=False, default=TaskClass.OTHER
+        SAEnum(TaskClass, values_callable=_enum_values),
+        nullable=False,
+        default=TaskClass.OTHER,
     )
-    capability_tags: Mapped[list[str]] = mapped_column(TEXT_LIST, nullable=False, default=list)
-    expected_touches: Mapped[list[str]] = mapped_column(TEXT_LIST, nullable=False, default=list)
-    exclusive_paths: Mapped[list[str]] = mapped_column(TEXT_LIST, nullable=False, default=list)
-    shared_paths: Mapped[list[str]] = mapped_column(TEXT_LIST, nullable=False, default=list)
-    introduced_in_plan_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    deprecated_in_plan_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    capability_tags: Mapped[list[str]] = mapped_column(
+        TEXT_LIST, nullable=False, default=list
+    )
+    expected_touches: Mapped[list[str]] = mapped_column(
+        TEXT_LIST, nullable=False, default=list
+    )
+    exclusive_paths: Mapped[list[str]] = mapped_column(
+        TEXT_LIST, nullable=False, default=list
+    )
+    shared_paths: Mapped[list[str]] = mapped_column(
+        TEXT_LIST, nullable=False, default=list
+    )
+    introduced_in_plan_version: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    deprecated_in_plan_version: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, nullable=False
+    )
 
 
 class DependencyEdgeModel(Base):
@@ -204,9 +258,13 @@ class DependencyEdgeModel(Base):
         UUID_TEXT, ForeignKey("task.id", ondelete="CASCADE"), nullable=False
     )
     unlock_on: Mapped[UnlockOnState] = mapped_column(
-        SAEnum(UnlockOnState, values_callable=_enum_values), nullable=False, default=UnlockOnState.INTEGRATED
+        SAEnum(UnlockOnState, values_callable=_enum_values),
+        nullable=False,
+        default=UnlockOnState.INTEGRATED,
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, nullable=False
+    )
 
 
 class LeaseModel(Base):
@@ -222,12 +280,18 @@ class LeaseModel(Base):
     agent_id: Mapped[str] = mapped_column(Text, nullable=False)
     token: Mapped[str] = mapped_column(String(36), nullable=False, unique=True)
     status: Mapped[LeaseStatus] = mapped_column(
-        SAEnum(LeaseStatus, values_callable=_enum_values), nullable=False, default=LeaseStatus.ACTIVE
+        SAEnum(LeaseStatus, values_callable=_enum_values),
+        nullable=False,
+        default=LeaseStatus.ACTIVE,
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    heartbeat_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    heartbeat_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
     fencing_counter: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
     released_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
@@ -243,14 +307,20 @@ class TaskReservationModel(Base):
     )
     assignee_agent_id: Mapped[str] = mapped_column(Text, nullable=False)
     mode: Mapped[ReservationMode] = mapped_column(
-        SAEnum(ReservationMode, values_callable=_enum_values), nullable=False, default=ReservationMode.HARD
+        SAEnum(ReservationMode, values_callable=_enum_values),
+        nullable=False,
+        default=ReservationMode.HARD,
     )
     status: Mapped[ReservationStatus] = mapped_column(
-        SAEnum(ReservationStatus, values_callable=_enum_values), nullable=False, default=ReservationStatus.ACTIVE
+        SAEnum(ReservationStatus, values_callable=_enum_values),
+        nullable=False,
+        default=ReservationStatus.ACTIVE,
     )
     ttl_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=1800)
     created_by: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     released_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -266,7 +336,9 @@ class PlanVersionModel(Base):
     change_set_id: Mapped[str | None] = mapped_column(UUID_TEXT, nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
 
 
 class PlanChangeSetModel(Base):
@@ -285,7 +357,9 @@ class PlanChangeSetModel(Base):
     )
     operations: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
     impact_preview: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
     created_by: Mapped[str] = mapped_column(Text, nullable=False)
     applied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -301,13 +375,18 @@ class TaskExecutionSnapshotModel(Base):
         UUID_TEXT, ForeignKey("task.id", ondelete="CASCADE"), nullable=False
     )
     lease_id: Mapped[str] = mapped_column(
-        UUID_TEXT, ForeignKey("lease.id", ondelete="RESTRICT"), nullable=False, unique=True
+        UUID_TEXT,
+        ForeignKey("lease.id", ondelete="RESTRICT"),
+        nullable=False,
+        unique=True,
     )
     captured_plan_version: Mapped[int] = mapped_column(Integer, nullable=False)
     work_spec_hash: Mapped[str] = mapped_column(Text, nullable=False)
     work_spec_payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     captured_by: Mapped[str] = mapped_column(Text, nullable=False)
-    captured_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
 
 
 class ArtifactModel(Base):
@@ -325,12 +404,18 @@ class ArtifactModel(Base):
     commit_sha: Mapped[str | None] = mapped_column(Text, nullable=True)
     check_suite_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
     check_status: Mapped[CheckStatus] = mapped_column(
-        SAEnum(CheckStatus, values_callable=_enum_values), nullable=False, default=CheckStatus.PENDING
+        SAEnum(CheckStatus, values_callable=_enum_values),
+        nullable=False,
+        default=CheckStatus.PENDING,
     )
-    touched_files: Mapped[list[str]] = mapped_column(JSON_LIST, nullable=False, default=list)
+    touched_files: Mapped[list[str]] = mapped_column(
+        JSON_LIST, nullable=False, default=list
+    )
     artifact_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     short_id: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
 
 
 class IntegrationAttemptModel(Base):
@@ -346,12 +431,16 @@ class IntegrationAttemptModel(Base):
     base_sha: Mapped[str | None] = mapped_column(Text, nullable=True)
     head_sha: Mapped[str | None] = mapped_column(Text, nullable=True)
     result: Mapped[IntegrationResult] = mapped_column(
-        SAEnum(IntegrationResult, values_callable=_enum_values), nullable=False, default=IntegrationResult.QUEUED
+        SAEnum(IntegrationResult, values_callable=_enum_values),
+        nullable=False,
+        default=IntegrationResult.QUEUED,
     )
     diagnostics: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     attempt_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     short_id: Mapped[str | None] = mapped_column(Text, nullable=True)
-    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
     ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
@@ -366,10 +455,16 @@ class GateRuleModel(Base):
     scope: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     conditions: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     required_evidence: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    required_reviewer_roles: Mapped[list[str]] = mapped_column(TEXT_LIST, nullable=False, default=list)
+    required_reviewer_roles: Mapped[list[str]] = mapped_column(
+        TEXT_LIST, nullable=False, default=list
+    )
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
 
 
 class GateDecisionModel(Base):
@@ -393,14 +488,20 @@ class GateDecisionModel(Base):
     )
     actor_id: Mapped[str] = mapped_column(Text, nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
-    evidence_refs: Mapped[list[str]] = mapped_column(JSON_LIST, nullable=False, default=list)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    evidence_refs: Mapped[list[str]] = mapped_column(
+        JSON_LIST, nullable=False, default=list
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
 
 
 class GateCandidateLinkModel(Base):
     __tablename__ = "gate_candidate_link"
     __table_args__ = (
-        UniqueConstraint("gate_task_id", "candidate_task_id", name="uq_gate_candidate_link_pair"),
+        UniqueConstraint(
+            "gate_task_id", "candidate_task_id", name="uq_gate_candidate_link_pair"
+        ),
     )
 
     id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
@@ -414,7 +515,9 @@ class GateCandidateLinkModel(Base):
         UUID_TEXT, ForeignKey("task.id", ondelete="CASCADE"), nullable=False
     )
     candidate_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
 
 
 class EventLogModel(Base):
@@ -430,4 +533,88 @@ class EventLogModel(Base):
     payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     caused_by: Mapped[str | None] = mapped_column(Text, nullable=True)
     correlation_id: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
+
+
+class MetricsJobCheckpointModel(Base):
+    __tablename__ = "metrics_job_checkpoint"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id", "mode", name="uq_metrics_checkpoint_project_mode"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    mode: Mapped[MetricsJobMode] = mapped_column(
+        SAEnum(MetricsJobMode, values_callable=_enum_values), nullable=False
+    )
+    last_event_id: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
+
+
+class MetricsStateTransitionCounterModel(Base):
+    __tablename__ = "metrics_state_transition_counter"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id",
+            "task_state",
+            name="uq_metrics_state_transition_counter_project_state",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    task_state: Mapped[TaskState] = mapped_column(
+        SAEnum(TaskState, values_callable=_enum_values), nullable=False
+    )
+    transition_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_event_id: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
+
+
+class MetricsJobRunModel(Base):
+    __tablename__ = "metrics_job_run"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id", "idempotency_key", name="uq_metrics_job_run_idempotency"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    mode: Mapped[MetricsJobMode] = mapped_column(
+        SAEnum(MetricsJobMode, values_callable=_enum_values), nullable=False
+    )
+    status: Mapped[MetricsJobStatus] = mapped_column(
+        SAEnum(MetricsJobStatus, values_callable=_enum_values), nullable=False
+    )
+    idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
+    replay_from_event_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    start_event_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_event_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    processed_events: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
