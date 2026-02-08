@@ -3,9 +3,11 @@ import pathlib
 from datetime import datetime
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Query, Request, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+
+from app.auth.permissions import require_permission
 
 from app.schemas import (
     AcknowledgeAlertResponse,
@@ -842,6 +844,7 @@ def get_metrics_summary(
     response: Response,
     project_id: str = Query(...),
     timestamp: str | None = Query(None),
+    _perm: None = Depends(require_permission("summary")),
 ) -> MetricsSummaryResponse:
     if not STORE.project_exists(project_id):
         raise HTTPException(
@@ -885,6 +888,7 @@ def get_metrics_trends(
     end_date: str = Query(...),
     granularity: Literal["hour", "day", "week", "month"] = Query("day"),
     dimensions: str | None = Query(None),
+    _perm: None = Depends(require_permission("trends")),
 ) -> MetricsTrendsResponse:
     if not STORE.project_exists(project_id):
         raise HTTPException(
@@ -921,6 +925,7 @@ def get_metrics_breakdown(
     dimension: str = Query(...),
     time_range: Literal["24h", "7d", "30d", "90d"] = Query("7d"),
     filters: str | None = Query(None),
+    _perm: None = Depends(require_permission("breakdown")),
 ) -> MetricsBreakdownResponse:
     if not STORE.project_exists(project_id):
         raise HTTPException(
@@ -968,6 +973,7 @@ def get_metrics_drilldown(
     sort_order: Literal["asc", "desc"] = Query("desc"),
     limit: int = Query(50),
     offset: int = Query(0),
+    _perm: None = Depends(require_permission("drilldown")),
 ) -> MetricsDrilldownResponse:
     if not STORE.project_exists(project_id):
         raise HTTPException(
