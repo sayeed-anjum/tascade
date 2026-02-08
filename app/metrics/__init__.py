@@ -1,3 +1,5 @@
-from app.metrics import calculators, primitives
+"""Metrics computation and reconciliation helpers."""
 
-__all__ = ["calculators", "primitives"]
+from app.metrics import calculators, primitives, reconciliation
+
+__all__ = ["calculators", "primitives", "reconciliation"]
