@@ -230,6 +230,113 @@ class MetricsIncrementalJobRunner:
                     "retry_after_seconds": schedule.retry_backoff_seconds,
                 }
 
+    def run_backfill(
+        self,
+        *,
+        project_id: str,
+        mode: MetricsJobMode,
+        replay_from_event_id: int = 1,
+        idempotency_prefix: str = "backfill",
+        max_runs: int | None = None,
+    ) -> dict[str, object]:
+        if replay_from_event_id < 1:
+            raise ValueError("INVALID_REPLAY_CURSOR")
+        if max_runs is not None and max_runs < 1:
+            raise ValueError("INVALID_MAX_RUNS")
+
+        runs = 0
+        reused_runs = 0
+        processed_events = 0
+        failed_run_id: str | None = None
+        next_replay_cursor: int | None = replay_from_event_id
+
+        while True:
+            if max_runs is not None and runs >= max_runs:
+                return {
+                    "status": "partial",
+                    "runs": runs,
+                    "reused_runs": reused_runs,
+                    "processed_events": processed_events,
+                    "failed_run_id": failed_run_id,
+                }
+
+            start_event_id = self._next_start_event_id(project_id=project_id, mode=mode)
+            if next_replay_cursor is not None:
+                start_event_id = next_replay_cursor
+
+            idempotency_key = (
+                f"{idempotency_prefix}:{mode.value}:"
+                f"{replay_from_event_id}:start:{start_event_id}"
+            )
+
+            existing = self._get_existing_run(
+                project_id=project_id,
+                idempotency_key=idempotency_key,
+            )
+            if existing is not None:
+                result = existing
+                reused_runs += 1
+            else:
+                result = self.run(
+                    project_id=project_id,
+                    mode=mode,
+                    idempotency_key=idempotency_key,
+                    replay_from_event_id=next_replay_cursor,
+                )
+
+            runs += 1
+            processed = int(result.get("processed_events", 0))
+            processed_events += processed
+
+            if result["status"] == MetricsJobStatus.FAILED.value:
+                failed_run_id = str(result["id"])
+                return {
+                    "status": "failed",
+                    "runs": runs,
+                    "reused_runs": reused_runs,
+                    "processed_events": processed_events,
+                    "failed_run_id": failed_run_id,
+                }
+
+            if processed == 0:
+                return {
+                    "status": "succeeded",
+                    "runs": runs,
+                    "reused_runs": reused_runs,
+                    "processed_events": processed_events,
+                    "failed_run_id": failed_run_id,
+                }
+
+            next_replay_cursor = None
+
+    def recover_failed_backfill(
+        self,
+        *,
+        project_id: str,
+        mode: MetricsJobMode,
+        failed_run_id: str,
+        idempotency_prefix: str = "recovery",
+        max_runs: int | None = None,
+    ) -> dict[str, object]:
+        with SessionLocal() as session:
+            failed_run = session.get(MetricsJobRunModel, failed_run_id)
+            if failed_run is None or failed_run.project_id != project_id:
+                raise KeyError("RUN_NOT_FOUND")
+            if failed_run.mode != mode:
+                raise ValueError("MODE_MISMATCH")
+            if failed_run.status != MetricsJobStatus.FAILED:
+                raise ValueError("RUN_NOT_FAILED")
+
+            replay_from_event_id = int(failed_run.start_event_id)
+
+        return self.run_backfill(
+            project_id=project_id,
+            mode=mode,
+            replay_from_event_id=replay_from_event_id,
+            idempotency_prefix=idempotency_prefix,
+            max_runs=max_runs,
+        )
+
     def get_transition_counters(self, *, project_id: str) -> dict[str, int]:
         with SessionLocal() as session:
             rows = (
@@ -289,6 +396,12 @@ class MetricsIncrementalJobRunner:
                 "failure_reason": run.failure_reason,
                 "schedule": self.describe_schedule(run.mode),
             }
+
+    def _next_start_event_id(self, *, project_id: str, mode: MetricsJobMode) -> int:
+        checkpoint = self.get_checkpoint(project_id=project_id, mode=mode)
+        if checkpoint is None:
+            return 1
+        return int(checkpoint["last_event_id"]) + 1
 
     def _event_to_state(self, event: EventLogModel) -> TaskState:
         payload = event.payload or {}
