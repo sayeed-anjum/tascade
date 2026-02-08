@@ -1998,6 +1998,31 @@ class SqlStore:
             return _alert_to_dict(alert)
 
 
+    # ------------------------------------------------------------------
+    # Workflow Actions (P5.M3.T5)
+    # ------------------------------------------------------------------
+
+    def get_suggestion_data(
+        self,
+        project_id: str,
+    ) -> dict[str, Any] | None:
+        """Retrieve the latest metrics summary and unacknowledged alerts
+        needed by the suggestion engine.
+
+        Returns ``None`` when no metrics summary exists for the project.
+        """
+        summary = self.get_metrics_summary(project_id)
+        if summary is None:
+            return None
+
+        alerts = self.list_alerts(project_id, acknowledged=False)
+
+        return {
+            "summary": summary.get("payload", {}),
+            "alerts": alerts,
+        }
+
+
 def _alert_to_dict(model: MetricsAlertModel) -> dict[str, Any]:
     return {
         "id": model.id,

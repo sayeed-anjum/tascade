@@ -51,6 +51,8 @@ from app.schemas import (
     TaskReservation,
     TaskSummary,
     UpdateIntegrationAttemptRequest,
+    WorkflowActionsResponse,
+    WorkflowSuggestion,
 )
 from app.store import STORE
 
@@ -1058,6 +1060,34 @@ def acknowledge_alert(
         )
     response.headers["X-API-Version"] = _API_VERSION_HEADER
     return AcknowledgeAlertResponse(id=result["id"], acknowledged_at=result["acknowledged_at"])
+
+
+# ---------------------------------------------------------------------------
+# Workflow Actions endpoint (P5.M3.T5)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/v1/metrics/actions", response_model=WorkflowActionsResponse)
+def get_workflow_actions(
+    response: Response,
+    project_id: str = Query(...),
+) -> WorkflowActionsResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    from app.metrics.actions import SuggestionEngine
+
+    engine = SuggestionEngine()
+    suggestions = engine.evaluate(project_id, STORE)
+    response.headers["X-API-Version"] = _API_VERSION_HEADER
+    return WorkflowActionsResponse(
+        project_id=project_id,
+        suggestions=[WorkflowSuggestion(**s) for s in suggestions],
+    )
 
 
 # ---------------------------------------------------------------------------
