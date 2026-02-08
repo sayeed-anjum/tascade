@@ -20,6 +20,10 @@ def test_schedule_reliability_counts_on_time() -> None:
     assert reliability == pytest.approx(2 / 3)
 
 
+def test_ratio_or_none_zero_over_zero_returns_zero() -> None:
+    assert primitives.ratio_or_none(0, 0) == 0.0
+
+
 def test_cycle_time_stability_handles_zero_mean() -> None:
     stability = calculators.cycle_time_stability([0, 0, 0])
 

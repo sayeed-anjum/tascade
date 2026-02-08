@@ -11,7 +11,7 @@ def clamp(value: float, lower: float = 0.0, upper: float = 1.0) -> float:
 
 def ratio_or_none(numerator: float, denominator: float) -> Optional[float]:
     if denominator == 0:
-        return None
+        return 0.0 if numerator == 0 else None
     return numerator / denominator
 
 

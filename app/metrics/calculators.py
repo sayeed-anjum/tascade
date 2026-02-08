@@ -77,6 +77,8 @@ def flow_efficiency_score(
     active_time: float, wait_time: float, blocked_time: float
 ) -> Optional[float]:
     denominator = active_time + wait_time + blocked_time
+    if denominator == 0:
+        return None
     return primitives.ratio_or_none(active_time, denominator)
 
 
