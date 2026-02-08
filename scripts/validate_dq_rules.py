@@ -3447,6 +3447,10 @@ def main():
     if args.fail_on_error and has_error:
         sys.exit(1)
 
+    # Implicit strictness for enforcement mode
+    if args.enforce and has_error:
+        sys.exit(1)
+
     sys.exit(0)
 
 
