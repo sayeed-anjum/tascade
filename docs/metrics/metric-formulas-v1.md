@@ -11,7 +11,7 @@
 ## 1. Introduction
 
 ### 1.1 Purpose
-This document provides the canonical technical specification for computing all 18 MVP metrics defined in the Tascade Metrics Catalogue v1.0. It establishes:
+This document provides the canonical technical specification for computing all 16 MVP metrics defined in the Tascade Metrics Catalogue v1.0. It establishes:
 
 - **Canonical formulas** with precise mathematical definitions
 - **Input variables** with units and data types
@@ -1238,9 +1238,9 @@ ON gate_decisions(status, gate_type, created_at);
 ### 11.3 Related Documents
 
 - [Metrics Catalogue v1.0](./metrics-catalogue-v1.md) - Metric definitions and business rationale
-- Task P5.M1.T6: Source-of-truth mapping (upcoming)
-- Task P5.M1.T7: Data contract schema (upcoming)
-- Task P5.M1.T8: Data quality rulebook (upcoming)
+- Task P5.M1.T6: Source-of-truth mapping (Complete)
+- Task P5.M1.T7: Data contract schema (Complete)
+- Task P5.M1.T8: Data quality rulebook (Complete)
 - Phase 5 WBS Plan: `docs/plans/2026-02-08-phase-5-project-metrics-wbs-plan.md`
 
 ---

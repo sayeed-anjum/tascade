@@ -19,7 +19,7 @@ export type TimeRange = '24h' | '7d' | '30d' | '90d';
 
 export type SortOrder = 'asc' | 'desc';
 
-export type ActionType = 'reroute_reviewer' | 'batch_merge' | 'split_task' | 'escalate';
+export type ActionType = 'reroute_reviewer' | 'escalate';
 
 export type Dimension = 'phase' | 'milestone' | 'assignee' | 'task_class';
 
@@ -145,26 +145,11 @@ export interface GateMetrics {
   sla_breach_rate: number;
 }
 
-export interface ReviewMetrics {
-  avg_throughput_per_reviewer: number;
-  load_skew_index: number;
-}
-
 export interface IntegrationOutcomes {
   success: number;
   conflict: number;
   failed_checks: number;
   avg_retry_to_success_minutes: number;
-}
-
-export interface ReplanMetrics {
-  changeset_apply_rate: number;
-  invalidation_impact_score: number;
-}
-
-export interface DependencyRiskMetrics {
-  critical_path_drift_hours: number;
-  fan_in_stress_score: number;
 }
 
 export interface OperationalMetrics {
@@ -174,17 +159,7 @@ export interface OperationalMetrics {
   blocked: BlockedMetrics;
   backlog: BacklogMetrics;
   gates: GateMetrics;
-  reviews: ReviewMetrics;
   integration_outcomes: IntegrationOutcomes;
-  replan: ReplanMetrics;
-  dependency_risk: DependencyRiskMetrics;
-}
-
-export interface BreachForecast {
-  milestone_id: string;
-  milestone_name: string;
-  breach_probability: number;
-  predicted_delay_hours: number;
 }
 
 export interface BottleneckContribution {
@@ -200,7 +175,6 @@ export interface SuggestedAction {
 }
 
 export interface ActionabilityMetrics {
-  breach_forecast: BreachForecast[];
   bottleneck_contribution: BottleneckContribution[];
   suggested_actions: SuggestedAction[];
 }
@@ -365,13 +339,9 @@ export type OperationalMetricId =
   | 'blocked'
   | 'backlog'
   | 'gate_latency'
-  | 'review_throughput'
-  | 'integration_outcomes'
-  | 'replan_churn'
-  | 'dependency_risk';
+  | 'integration_outcomes';
 
 export type ActionabilityMetricId =
-  | 'breach_forecast'
   | 'bottleneck_contribution'
   | 'suggested_actions';
 
@@ -447,14 +417,10 @@ export const OPERATIONAL_METRICS: OperationalMetricId[] = [
   'blocked',
   'backlog',
   'gate_latency',
-  'review_throughput',
   'integration_outcomes',
-  'replan_churn',
-  'dependency_risk',
 ];
 
 export const ACTIONABILITY_METRICS: ActionabilityMetricId[] = [
-  'breach_forecast',
   'bottleneck_contribution',
   'suggested_actions',
 ];

@@ -5,7 +5,7 @@
 This document defines the versioned API contract (v1) for the Tascade Metrics system. The API provides access to project health metrics, trends, breakdowns, and drill-down capabilities.
 
 **Version:** v1  
-**Base Path:** `/api/v1/metrics`  
+**Base Path:** `/v1/metrics`  
 **Content-Type:** `application/json`  
 **API Stability:** Stable - backward-compatible changes only
 
@@ -152,13 +152,6 @@ Returns a project health overview with current snapshot of key metrics.
                 "sla_breach_rate": { "type": "number" }
               }
             },
-            "reviews": {
-              "type": "object",
-              "properties": {
-                "avg_throughput_per_reviewer": { "type": "number" },
-                "load_skew_index": { "type": "number" }
-              }
-            },
             "integration_outcomes": {
               "type": "object",
               "properties": {
@@ -167,38 +160,12 @@ Returns a project health overview with current snapshot of key metrics.
                 "failed_checks": { "type": "integer" },
                 "avg_retry_to_success_minutes": { "type": "number" }
               }
-            },
-            "replan": {
-              "type": "object",
-              "properties": {
-                "changeset_apply_rate": { "type": "number" },
-                "invalidation_impact_score": { "type": "number" }
-              }
-            },
-            "dependency_risk": {
-              "type": "object",
-              "properties": {
-                "critical_path_drift_hours": { "type": "number" },
-                "fan_in_stress_score": { "type": "number" }
-              }
             }
           }
         },
         "actionability": {
           "type": "object",
           "properties": {
-            "breach_forecast": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "milestone_id": { "type": "string" },
-                  "milestone_name": { "type": "string" },
-                  "breach_probability": { "type": "number" },
-                  "predicted_delay_hours": { "type": "number" }
-                }
-              }
-            },
             "bottleneck_contribution": {
               "type": "array",
               "items": {
@@ -214,7 +181,7 @@ Returns a project health overview with current snapshot of key metrics.
               "items": {
                 "type": "object",
                 "properties": {
-                  "action_type": { "type": "string", "enum": ["reroute_reviewer", "batch_merge", "split_task", "escalate"] },
+                  "action_type": { "type": "string", "enum": ["reroute_reviewer", "escalate"] },
                   "confidence": { "type": "number" },
                   "affected_tasks": { "type": "array", "items": { "type": "string" } },
                   "rationale": { "type": "string" }
@@ -291,34 +258,14 @@ Returns a project health overview with current snapshot of key metrics.
         "avg_latency_minutes": 120.0,
         "sla_breach_rate": 0.05
       },
-      "reviews": {
-        "avg_throughput_per_reviewer": 8.5,
-        "load_skew_index": 0.25
-      },
       "integration_outcomes": {
         "success": 22,
         "conflict": 1,
         "failed_checks": 1,
         "avg_retry_to_success_minutes": 30.0
-      },
-      "replan": {
-        "changeset_apply_rate": 0.15,
-        "invalidation_impact_score": 0.08
-      },
-      "dependency_risk": {
-        "critical_path_drift_hours": 8.5,
-        "fan_in_stress_score": 0.12
       }
     },
     "actionability": {
-      "breach_forecast": [
-        {
-          "milestone_id": "P5.M2",
-          "milestone_name": "Metrics Data Pipeline",
-          "breach_probability": 0.25,
-          "predicted_delay_hours": 48
-        }
-      ],
       "bottleneck_contribution": [
         { "stage": "review", "delay_contribution_pct": 45.0 },
         { "stage": "integration", "delay_contribution_pct": 30.0 },
@@ -802,15 +749,11 @@ When limit exceeded:
 | `blocked` | Blocked tasks ratio and duration |
 | `backlog` | Implemented-not-integrated backlog |
 | `gate_latency` | Gate queue time and SLA breaches |
-| `review_throughput` | Reviewer capacity metrics |
 | `integration_outcomes` | Integration attempt results |
-| `replan_churn` | Changeset and invalidation rates |
-| `dependency_risk` | Critical path and fan-in indicators |
 
 ### Actionability Metrics
 | Identifier | Description |
 |------------|-------------|
-| `breach_forecast` | Milestone SLA breach predictions |
 | `bottleneck_contribution` | Stage-level delay contribution |
 | `suggested_actions` | Action recommendations |
 

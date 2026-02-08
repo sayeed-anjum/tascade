@@ -16,8 +16,8 @@
 ### Scope Decision
 This document finalizes the **strict MVP scope** for Tascade metrics delivery. After analyzing business impact, implementation complexity, and dependencies from prerequisite tasks (T4-T8), we are committing to:
 
-- **14 metrics in MVP scope** (9 P0 + 5 P1)
-- **11 metrics deferred to post-MVP** (5 P2 + 6 P1 with high complexity)
+- **16 metrics in MVP scope** (11 P0 + 5 P1)
+- **9 metrics deferred to post-MVP** (5 P2 + 4 P1 with high complexity)
 
 ### Rationale
 The MVP scope balances:
@@ -49,7 +49,7 @@ All north star metrics are in-scope as they provide foundational visibility for 
 
 ---
 
-### 2.2 Operational Metrics (6 of 12 - 50%)
+### 2.2 Operational Metrics (8 of 12 - 67%)
 
 | ID | Metric | Priority | Justification |
 |----|--------|----------|---------------|
@@ -59,8 +59,10 @@ All north star metrics are in-scope as they provide foundational visibility for 
 | OP-4 | WIP Age and Aging Buckets | P0 | Early warning for stuck work; real-time operational visibility |
 | OP-5 | Blocked Ratio and Blocked Age | P0 | Dependency/external risk exposure; drives blocker prioritization |
 | OP-6 | INI Backlog | P0 | "Done but not shipped" inventory; merge conflict risk indicator |
+| OP-9 | Integration Outcome Mix | P0 | Success/failure/rollback distribution; pipeline health visibility |
+| OP-12 | State Distribution | P0 | Real-time WIP visualization by state; capacity planning support |
 
-**Operational Coverage:** 50% (6/12) - Focus on highest-value, lowest-complexity metrics
+**Operational Coverage:** 67% (8/12) - Focus on highest-value, lowest-complexity metrics
 
 ---
 
@@ -78,14 +80,14 @@ All north star metrics are in-scope as they provide foundational visibility for 
 
 ### 2.4 MVP Metrics Summary
 
-**Total MVP Metrics: 14**
+**Total MVP Metrics: 16**
 
 | Category | In MVP | Total | Coverage |
 |----------|--------|-------|----------|
 | North Star | 5 | 5 | 100% |
-| Operational | 6 | 12 | 50% |
+| Operational | 8 | 12 | 67% |
 | Actionability | 3 | 8 | 38% |
-| **Total** | **14** | **25** | **56%** |
+| **Total** | **16** | **25** | **64%** |
 
 ---
 
@@ -96,8 +98,6 @@ All north star metrics are in-scope as they provide foundational visibility for 
 | ID | Metric | Priority | Deferral Rationale |
 |----|--------|----------|-------------------|
 | OP-7 | Gate Queue Metrics | P1 | Medium complexity; can leverage existing gate_decisions table in P5.M3 |
-| OP-9 | Integration Outcome Mix | P0 | **RECONSIDERED** - Low complexity, high value; should be in MVP |
-| OP-12 | State Distribution | P0 | **RECONSIDERED** - Low complexity, essential for WIP visualization |
 | ACT-1 | SLA Breach Forecast | P1 | High complexity forecasting model; requires historical baseline |
 | ACT-4 | Batch Merge Recommendation | P1 | Requires conflict risk model calibration; valuable but not critical |
 
@@ -131,7 +131,7 @@ All north star metrics are in-scope as they provide foundational visibility for 
 
 | # | Criterion | Target | Verification Method |
 |---|-----------|--------|---------------------|
-| 4.1.1 | All 14 MVP metrics implemented | 100% | Unit test coverage per metric |
+| 4.1.1 | All 16 MVP metrics implemented | 100% | Unit test coverage per metric |
 | 4.1.2 | Formula correctness validated | < 1% delta | Golden dataset reconciliation |
 | 4.1.3 | Edge cases handled | All | Unit tests for nulls, division by zero, outliers |
 | 4.1.4 | Metric computation idempotent | Yes | Replay determinism tests |
@@ -141,7 +141,7 @@ All north star metrics are in-scope as they provide foundational visibility for 
 | # | Criterion | Target | Verification Method |
 |---|-----------|--------|---------------------|
 | 4.2.1 | All summary endpoint fields populated | 100% | Schema validation tests |
-| 4.2.2 | Trends endpoint functional | All 14 metrics | Integration tests |
+| 4.2.2 | Trends endpoint functional | All 16 metrics | Integration tests |
 | 4.2.3 | Breakdown endpoint functional | Key dimensions | Integration tests |
 | 4.2.4 | Drilldown endpoint functional | Task-level queries | Integration tests |
 | 4.2.5 | Error responses compliant | All error codes | Contract tests |
@@ -177,7 +177,7 @@ All north star metrics are in-scope as they provide foundational visibility for 
 | 4.5.3 | Source mapping | Published | T6 Complete |
 | 4.5.4 | API contract | Published | T7 Complete |
 | 4.5.5 | DQ rulebook | Published | T8 Complete |
-| 4.5.6 | MVP scope document | This document | T9 In Progress |
+| 4.5.6 | MVP scope document | This document | T9 Complete |
 | 4.5.7 | API documentation | Auto-generated from schema | CI pipeline |
 | 4.5.8 | Runbook | Operational procedures | Required before release |
 
@@ -234,12 +234,12 @@ All north star metrics are in-scope as they provide foundational visibility for 
 
 ### 5.4 What's At Risk If Scope Changes
 
-**If we ADD metrics beyond 14:**
+**If we ADD metrics beyond 16:**
 - Timeline extension: +1-2 weeks per operational metric, +2-3 weeks per actionability metric
 - Quality risk: Less time for testing and reconciliation
 - Focus dilution: Attention spread across more metrics
 
-**If we REMOVE metrics from current 14:**
+**If we REMOVE metrics from current 16:**
 - NS metrics: Executive reporting gaps, reduced visibility
 - OP metrics: Operational blind spots, reduced workflow insight
 - ACT metrics: Reduced automation value, manual interventions required
@@ -318,7 +318,7 @@ Total MVP Timeline: 8 weeks from P5.M2 start
 
 - **Built-in buffer:** 1 week in P5.M2, 1 week in P5.M3
 - **Deferral options:** OP-7, ACT-4 can move to P5.M4 without blocking release
-- **Stretch goal:** Add OP-9 and OP-12 if ahead of schedule (both P0, low complexity)
+- ~~Stretch goal: Add OP-9 and OP-12 if ahead of schedule~~ (Included in MVP as of T12)
 
 ---
 
@@ -339,6 +339,8 @@ Total MVP Timeline: 8 weeks from P5.M2 start
 | Operational | OP-4 | WIP Age and Aging Buckets | Project Operator | < 15% stale |
 | Operational | OP-5 | Blocked Ratio and Blocked Age | Project Planner | < 15% ratio |
 | Operational | OP-6 | INI Backlog | Release Manager | < 10 tasks |
+| Operational | OP-9 | Integration Outcome Mix | Release Manager | Success rate ≥ 85% |
+| Operational | OP-12 | State Distribution | Project Operator | Balanced WIP |
 | Actionability | ACT-2 | Bottleneck Contribution Analysis | Team Lead | Identify primary bottleneck |
 | Actionability | ACT-6 | Review Reassignment Prompt | Code Reviewer | > 48h trigger |
 | Actionability | ACT-7 | Dependency Risk Alert | Project Planner | Float consumption alert |
@@ -350,6 +352,8 @@ Total MVP Timeline: 8 weeks from P5.M2 start
 | P5.M3 Extension | OP-7, ACT-1, ACT-4 | 3 |
 | P5.M4 | OP-8, OP-10, OP-11, ACT-3, ACT-5 | 5 |
 | Future | ACT-8, cross-project, ML features | 3+ |
+
+*Note: OP-9 and OP-12 moved to MVP scope per T12 remediation*
 
 ### 8.3 Change Log
 
