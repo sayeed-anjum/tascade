@@ -73,6 +73,17 @@ def health() -> dict[str, str]:
 @app.post("/v1/projects", response_model=Project, status_code=status.HTTP_201_CREATED)
 def create_project(payload: CreateProjectRequest, auth: AuthContext = Depends(get_auth_context)) -> Project:
     require_role("create_project", auth)
+    if auth.project_id != "*":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ErrorResponse(
+                error={
+                    "code": "PROJECT_SCOPE_VIOLATION",
+                    "message": "Project-scoped keys cannot create new projects; use a wildcard or admin key",
+                    "retryable": False,
+                }
+            ).model_dump(),
+        )
     project = STORE.create_project(payload.name)
     return Project(**project)
 
@@ -820,7 +831,16 @@ def create_plan_changeset(payload: CreatePlanChangesetRequest, auth: AuthContext
 
 @app.post("/v1/plans/changesets/{changeset_id}/apply", response_model=ApplyPlanChangesetResponse)
 def apply_plan_changeset(changeset_id: str, payload: ApplyPlanChangesetRequest | None = None, auth: AuthContext = Depends(get_auth_context)) -> ApplyPlanChangesetResponse:
-    require_role("apply_plan_changeset", auth)
+    try:
+        changeset_project_id = STORE.get_changeset_project_id(changeset_id)
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "CHANGESET_NOT_FOUND", "message": "Changeset not found", "retryable": False}
+            ).model_dump(),
+        )
+    require_role("apply_plan_changeset", auth, target_project_id=changeset_project_id)
     allow_rebase = payload.allow_rebase if payload is not None else False
     try:
         changeset, plan_version, invalid_claims, invalid_reservations = STORE.apply_plan_changeset(

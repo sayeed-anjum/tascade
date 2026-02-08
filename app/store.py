@@ -1644,6 +1644,14 @@ class SqlStore:
         task.updated_at = _now()
         return material
 
+    def get_changeset_project_id(self, changeset_id: str) -> str:
+        """Return the project_id for a changeset, or raise KeyError."""
+        with SessionLocal() as session:
+            changeset = session.get(PlanChangeSetModel, changeset_id)
+            if changeset is None:
+                raise KeyError("CHANGESET_NOT_FOUND")
+            return changeset.project_id
+
     def apply_plan_changeset(
         self, changeset_id: str, allow_rebase: bool = False
     ) -> tuple[dict[str, Any], dict[str, Any], list[str], list[str]]:

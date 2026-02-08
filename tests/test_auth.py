@@ -345,3 +345,60 @@ class TestAuditLogging:
             payload = events[0].payload
             assert payload["reason"] == "insufficient_role"
             assert payload["endpoint"] == "create_task"
+
+
+# ---------------------------------------------------------------------------
+# Project isolation regressions
+# ---------------------------------------------------------------------------
+
+
+class TestProjectIsolation:
+    def test_scoped_key_cannot_create_project(self, monkeypatch):
+        """A project-scoped planner key must not create new projects."""
+        _enable_auth(monkeypatch)
+        client = TestClient(app, raise_server_exceptions=False)
+        monkeypatch.undo()
+        proj = _create_project(client)
+        _enable_auth(monkeypatch)
+        planner_key = _make_key(proj["id"], ["planner"])
+        resp = client.post(
+            "/v1/projects",
+            json={"name": "rogue-project"},
+            headers=_auth_header(planner_key),
+        )
+        assert resp.status_code == 403
+        assert resp.json()["error"]["code"] == "PROJECT_SCOPE_VIOLATION"
+
+    def test_apply_changeset_cross_project_returns_403(self, monkeypatch):
+        """A key scoped to project A must not apply a changeset from project B."""
+        _enable_auth(monkeypatch)
+        client = TestClient(app, raise_server_exceptions=False)
+        monkeypatch.undo()
+        proj_a = _create_project(client)
+        proj_b = _create_project(client)
+        phase = STORE.create_phase(project_id=proj_b["id"], name="P1", sequence=0)
+        milestone = STORE.create_milestone(
+            project_id=proj_b["id"], name="M1", sequence=0, phase_id=phase["id"]
+        )
+        # Create a changeset in project B
+        changeset_resp = client.post(
+            "/v1/plans/changesets",
+            json={
+                "project_id": proj_b["id"],
+                "base_plan_version": 1,
+                "target_plan_version": 2,
+                "operations": [],
+                "created_by": "test",
+            },
+        )
+        assert changeset_resp.status_code == 201
+        changeset_id = changeset_resp.json()["id"]
+        _enable_auth(monkeypatch)
+        # Key scoped to project A
+        planner_key = _make_key(proj_a["id"], ["planner"])
+        resp = client.post(
+            f"/v1/plans/changesets/{changeset_id}/apply",
+            headers=_auth_header(planner_key),
+        )
+        assert resp.status_code == 403
+        assert resp.json()["error"]["code"] == "PROJECT_SCOPE_VIOLATION"
