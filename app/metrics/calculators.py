@@ -177,6 +177,19 @@ def cycle_time_distribution(
     }
 
 
+def wip_age_seconds(
+    entered_in_progress_at: datetime, now: Optional[datetime] = None
+) -> float:
+    if now is None:
+        now = (
+            datetime.now(tz=entered_in_progress_at.tzinfo)
+            if entered_in_progress_at.tzinfo
+            else datetime.utcnow()
+        )
+    age_seconds = (now - entered_in_progress_at).total_seconds()
+    return max(age_seconds, 0.0)
+
+
 def wip_age_bucket(age_seconds: float) -> str:
     if age_seconds < 3 * SECONDS_PER_DAY:
         return "fresh"
@@ -215,6 +228,29 @@ def conflict_probability(age_days: float, base_conflict_rate: float = 0.05) -> f
     effective_age = max(age_days, 0)
     probability = 1 - (1 - base_conflict_rate) ** effective_age
     return primitives.clamp(probability, 0.0, 1.0)
+
+
+def ini_count(states: Iterable[str]) -> int:
+    return sum(1 for state in states if state == "implemented")
+
+
+def ini_age_seconds(implemented_at: datetime, now: Optional[datetime] = None) -> float:
+    if now is None:
+        now = (
+            datetime.now(tz=implemented_at.tzinfo)
+            if implemented_at.tzinfo
+            else datetime.utcnow()
+        )
+    age_seconds = (now - implemented_at).total_seconds()
+    return max(age_seconds, 0.0)
+
+
+def ini_age_distribution(ages_seconds: Iterable[float]) -> dict[str, Optional[float]]:
+    values = list(ages_seconds)
+    return {
+        "p50": primitives.percentile_cont(values, 0.50),
+        "p90": primitives.percentile_cont(values, 0.90),
+    }
 
 
 def ini_risk_score(conflict_probability_value: float, priority: Optional[str]) -> float:

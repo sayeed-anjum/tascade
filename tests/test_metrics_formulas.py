@@ -53,6 +53,13 @@ def test_flow_efficiency_score_basic() -> None:
     assert score == pytest.approx(16 / 30)
 
 
+def test_flow_efficiency_score_zero_denominator_returns_none() -> None:
+    assert (
+        calculators.flow_efficiency_score(active_time=0, wait_time=0, blocked_time=0)
+        is None
+    )
+
+
 def test_integration_reliability_score_combines_success_and_recovery() -> None:
     attempts = ["success", "success", "conflict", "check_failure"]
     recovery_times = [2 * 3600, 6 * 3600]
@@ -131,6 +138,15 @@ def test_wip_age_bucketization() -> None:
     assert buckets["at_risk"] == 1
 
 
+def test_wip_age_seconds_from_entered_in_progress() -> None:
+    now = datetime(2026, 2, 8, 12, 0, tzinfo=timezone.utc)
+    entered = now - timedelta(days=2, hours=6)
+
+    age_seconds = calculators.wip_age_seconds(entered, now=now)
+
+    assert age_seconds == pytest.approx((2 * 86400) + (6 * 3600))
+
+
 def test_blocked_ratio_and_age_summary() -> None:
     ratio = calculators.blocked_ratio(blocked_count=2, total_wip_count=10)
     summary = calculators.blocked_age_summary([3600, 7200, 10800])
@@ -146,6 +162,24 @@ def test_ini_conflict_probability_and_risk_score() -> None:
 
     assert probability == pytest.approx(1 - (1 - 0.05) ** 3)
     assert risk == pytest.approx(probability * 0.8)
+
+
+def test_ini_count_and_age_distribution() -> None:
+    states = [
+        "implemented",
+        "ready",
+        "implemented",
+        "blocked",
+        "implemented",
+    ]
+    ages = [3600, 7200, 10800, 14400]
+
+    count = calculators.ini_count(states)
+    distribution = calculators.ini_age_distribution(ages)
+
+    assert count == 3
+    assert distribution["p50"] == pytest.approx(primitives.percentile_cont(ages, 0.5))
+    assert distribution["p90"] == pytest.approx(primitives.percentile_cont(ages, 0.9))
 
 
 def test_integration_outcome_mix_counts() -> None:
