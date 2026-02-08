@@ -2,9 +2,11 @@
 // Thin fetch wrapper for the Tascade REST API.
 // Uses VITE_API_BASE_URL env var; defaults to empty string so the Vite dev
 // proxy (/v1/* -> localhost:8000) works out of the box.
+// VITE_API_TOKEN: optional Bearer token for authenticated requests.
 // ---------------------------------------------------------------------------
 
 const BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? "";
+const API_TOKEN: string | undefined = import.meta.env.VITE_API_TOKEN;
 
 export class ApiError extends Error {
   readonly status: number;
@@ -23,12 +25,14 @@ export async function apiFetch<T>(
   init?: RequestInit,
 ): Promise<T> {
   const url = `${BASE_URL}${path}`;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {}),
+    ...(init?.headers as Record<string, string>),
+  };
   const res = await fetch(url, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
+    headers,
   });
 
   if (!res.ok) {
