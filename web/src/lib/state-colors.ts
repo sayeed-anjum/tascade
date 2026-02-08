@@ -5,14 +5,16 @@
 
 import { STATE_COLORS } from "@/lib/constants";
 
+// All colour pairings are verified against WCAG AA (≥ 4.5:1 for normal text).
+// Light mode: *-900 text on *-100 bg. Dark mode: *-200 text on *-900 bg.
 const COLOR_BG_CLASSES: Record<string, string> = {
-  blue: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  amber: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+  blue: "bg-blue-100 text-blue-900 dark:bg-blue-900 dark:text-blue-200",
+  amber: "bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-200",
   purple:
-    "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-  teal: "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200",
-  green: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  red: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+    "bg-purple-100 text-purple-900 dark:bg-purple-900 dark:text-purple-200",
+  teal: "bg-teal-100 text-teal-900 dark:bg-teal-900 dark:text-teal-200",
+  green: "bg-green-100 text-green-900 dark:bg-green-900 dark:text-green-200",
+  red: "bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-200",
 };
 
 const FALLBACK_COLOR =

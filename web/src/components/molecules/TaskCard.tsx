@@ -17,10 +17,11 @@ interface TaskCardProps {
 export default function TaskCard({ task, onSelect }: TaskCardProps) {
   return (
     <Card
-      className="cursor-pointer py-3 gap-2 transition-shadow hover:shadow-md"
+      className="cursor-pointer py-3 gap-2 transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       onClick={() => onSelect(task.id)}
       role="button"
       tabIndex={0}
+      aria-label={`${task.short_id ?? task.id.slice(0, 8)}: ${task.title}`}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();

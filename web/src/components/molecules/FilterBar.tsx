@@ -110,7 +110,7 @@ export default function FilterBar({
         value={filters.phase || ALL_VALUE}
         onValueChange={(v) => update({ phase: selectVal(v) })}
       >
-        <SelectTrigger className="h-8 w-[140px] text-xs">
+        <SelectTrigger aria-label="Filter by phase" className="h-8 w-[140px] text-xs">
           <SelectValue placeholder="Phase" />
         </SelectTrigger>
         <SelectContent>
@@ -128,7 +128,7 @@ export default function FilterBar({
         value={filters.milestone || ALL_VALUE}
         onValueChange={(v) => update({ milestone: selectVal(v) })}
       >
-        <SelectTrigger className="h-8 w-[150px] text-xs">
+        <SelectTrigger aria-label="Filter by milestone" className="h-8 w-[150px] text-xs">
           <SelectValue placeholder="Milestone" />
         </SelectTrigger>
         <SelectContent>
@@ -146,7 +146,7 @@ export default function FilterBar({
         value={filters.state || ALL_VALUE}
         onValueChange={(v) => update({ state: selectVal(v) })}
       >
-        <SelectTrigger className="h-8 w-[140px] text-xs">
+        <SelectTrigger aria-label="Filter by state" className="h-8 w-[140px] text-xs">
           <SelectValue placeholder="State" />
         </SelectTrigger>
         <SelectContent>
@@ -164,7 +164,7 @@ export default function FilterBar({
         value={filters.taskClass || ALL_VALUE}
         onValueChange={(v) => update({ taskClass: selectVal(v) })}
       >
-        <SelectTrigger className="h-8 w-[130px] text-xs">
+        <SelectTrigger aria-label="Filter by task class" className="h-8 w-[130px] text-xs">
           <SelectValue placeholder="Class" />
         </SelectTrigger>
         <SelectContent>
@@ -182,7 +182,7 @@ export default function FilterBar({
         value={filters.capability || ALL_VALUE}
         onValueChange={(v) => update({ capability: selectVal(v) })}
       >
-        <SelectTrigger className="h-8 w-[140px] text-xs">
+        <SelectTrigger aria-label="Filter by capability" className="h-8 w-[140px] text-xs">
           <SelectValue placeholder="Capability" />
         </SelectTrigger>
         <SelectContent>
@@ -197,7 +197,8 @@ export default function FilterBar({
 
       {/* Free text search */}
       <Input
-        type="text"
+        type="search"
+        aria-label="Search tasks"
         placeholder="Search tasks..."
         className="h-8 w-[180px] text-xs"
         value={filters.search}
