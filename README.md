@@ -20,6 +20,14 @@ export TASCADE_DATABASE_URL='postgresql+psycopg://postgres:postgres@localhost:54
 uvicorn app.main:app --reload --port 8010
 ```
 
+See **[docs/RUNBOOK.md](docs/RUNBOOK.md)** for a comprehensive usage guide covering
+installation, development workflows, deployment, and the web dashboard.
+
+```bash
+# Quick-start: build the web UI and serve everything on port 8010
+make serve
+```
+
 If `TASCADE_DATABASE_URL` is not set, the app defaults to:
 
 `postgresql+psycopg://postgres:postgres@localhost:5432/tascade`
@@ -36,11 +44,15 @@ Optional overrides:
 
 ## MCP server
 
-An MCP server is available for agent setup + execution orchestration:
+An MCP server is available for agent setup + execution orchestration.
+Use the self-locating launcher script so you never need to set `cwd`:
 
 ```bash
-python -m app.mcp_server
+./mcp-server.sh
 ```
+
+See [docs/RUNBOOK.md](docs/RUNBOOK.md) § 6 for Claude Code, Codex, and
+OpenCode configuration examples.
 
 Available tools:
 

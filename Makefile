@@ -6,4 +6,4 @@ build-web:
 
 # Run the FastAPI server (serves API + embedded UI)
 serve: build-web
-	uvicorn app.main:app --host 0.0.0.0 --port 8000
+	uvicorn app.main:app --host 0.0.0.0 --port 8010

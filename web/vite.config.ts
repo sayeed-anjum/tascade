@@ -13,8 +13,8 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/v1": "http://localhost:8000",
-      "/health": "http://localhost:8000",
+      "/v1": "http://localhost:8010",
+      "/health": "http://localhost:8010",
     },
   },
 });
