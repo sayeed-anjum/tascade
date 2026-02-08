@@ -35,13 +35,17 @@ This document provides the canonical technical specification for computing all 1
 
 ### 1.3 Metric Summary
 
-**Total MVP Metrics:** 18
+**Total MVP Metrics:** 16
 
-| Category | Count | Metrics |
-|----------|-------|---------|
-| North Star | 5 | NS-1 through NS-5 |
-| Operational | 8 | OP-1 through OP-7, OP-9, OP-12 |
-| Actionability | 5 | ACT-1, ACT-2, ACT-4, ACT-6, ACT-7 |
+| Category | Count | Metrics | Status |
+|----------|-------|---------|--------|
+| North Star | 5 | NS-1 through NS-5 | In Scope |
+| Operational | 8 | OP-1 through OP-6, OP-9, OP-12 | In Scope |
+| Operational (deferred) | 1 | OP-7 | Post-MVP |
+| Actionability | 3 | ACT-2, ACT-6, ACT-7 | In Scope |
+| Actionability (deferred) | 2 | ACT-1, ACT-4 | Post-MVP |
+
+**Note:** This document includes formulas for 18 total metrics (5 NS + 9 OP + 4 ACT defined). ACT-1, ACT-4, and OP-7 formulas are documented for completeness but are deferred to Post-MVP per scope freeze.
 
 ---
 
@@ -524,7 +528,7 @@ Where `base_conflict_rate` = 0.05 (5% per day)
 
 ---
 
-### 4.7 OP-7: Gate Queue Metrics
+### 4.7 OP-7: Gate Queue Metrics (Deferred)
 
 **Formulas:**
 

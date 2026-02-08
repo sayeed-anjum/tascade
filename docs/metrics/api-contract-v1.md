@@ -160,6 +160,16 @@ Returns a project health overview with current snapshot of key metrics.
                 "failed_checks": { "type": "integer" },
                 "avg_retry_to_success_minutes": { "type": "number" }
               }
+            },
+            "state_distribution": {
+              "type": "object",
+              "properties": {
+                "by_state": {
+                  "type": "object",
+                  "additionalProperties": { "type": "integer" }
+                },
+                "wip_count": { "type": "integer" }
+              }
             }
           }
         },
@@ -750,6 +760,7 @@ When limit exceeded:
 | `backlog` | Implemented-not-integrated backlog |
 | `gate_latency` | Gate queue time and SLA breaches |
 | `integration_outcomes` | Integration attempt results |
+| `state_distribution` | Task state distribution and WIP by state |
 
 ### Actionability Metrics
 | Identifier | Description |

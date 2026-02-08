@@ -947,9 +947,6 @@ python scripts/validate_dq_rules.py --format json
 
 # Fail on any error (for CI)
 python scripts/validate_dq_rules.py --fail-on-error
-
-# Generate remediation report
-python scripts/validate_dq_rules.py --remediation-report
 ```
 
 ---

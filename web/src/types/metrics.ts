@@ -152,6 +152,11 @@ export interface IntegrationOutcomes {
   avg_retry_to_success_minutes: number;
 }
 
+export interface StateDistributionMetrics {
+  by_state: Record<string, number>;
+  wip_count: number;
+}
+
 export interface OperationalMetrics {
   throughput: ThroughputMetrics;
   cycle_time: CycleTimeMetrics;
@@ -160,6 +165,7 @@ export interface OperationalMetrics {
   backlog: BacklogMetrics;
   gates: GateMetrics;
   integration_outcomes: IntegrationOutcomes;
+  state_distribution: StateDistributionMetrics;
 }
 
 export interface BottleneckContribution {
@@ -339,7 +345,8 @@ export type OperationalMetricId =
   | 'blocked'
   | 'backlog'
   | 'gate_latency'
-  | 'integration_outcomes';
+  | 'integration_outcomes'
+  | 'state_distribution';
 
 export type ActionabilityMetricId =
   | 'bottleneck_contribution'
@@ -418,6 +425,7 @@ export const OPERATIONAL_METRICS: OperationalMetricId[] = [
   'backlog',
   'gate_latency',
   'integration_outcomes',
+  'state_distribution',
 ];
 
 export const ACTIONABILITY_METRICS: ActionabilityMetricId[] = [
