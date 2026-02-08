@@ -514,3 +514,159 @@ class RevokeApiKeyResponse(BaseModel):
     id: str
     status: str
     revoked_at: str
+
+
+# ---------------------------------------------------------------------------
+# Metrics API Schemas (P5.M3.T1)
+# ---------------------------------------------------------------------------
+
+
+class MetricsSummaryResponse(BaseModel):
+    version: str = "1.0"
+    project_id: str
+    timestamp: str
+    metrics: dict[str, Any]
+
+
+class TrendDataPoint(BaseModel):
+    timestamp: str
+    value: float
+    dimensions: dict[str, str] | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class MetricsTrendsResponse(BaseModel):
+    version: str = "1.0"
+    project_id: str
+    metric: str
+    granularity: str
+    start_date: str
+    end_date: str
+    data: list[TrendDataPoint]
+
+
+class BreakdownItem(BaseModel):
+    dimension_value: str
+    value: float
+    percentage: float
+    count: int = 0
+    trend: dict[str, Any] | None = None
+
+
+class MetricsBreakdownResponse(BaseModel):
+    version: str = "1.0"
+    project_id: str
+    metric: str
+    dimension: str
+    time_range: str = "7d"
+    total: float = 0
+    breakdown: list[BreakdownItem]
+
+
+class DrilldownItemSchema(BaseModel):
+    task_id: str
+    task_title: str = ""
+    value: float = 0
+    timestamp: str = ""
+    context: dict[str, Any] = Field(default_factory=dict)
+    contributing_factors: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class PaginationSchema(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class AggregationSchema(BaseModel):
+    sum: float = 0
+    avg: float = 0
+    min: float = 0
+    max: float = 0
+    p50: float = 0
+    p90: float = 0
+    p95: float = 0
+
+
+class MetricsDrilldownResponse(BaseModel):
+    version: str = "1.0"
+    project_id: str
+    metric: str
+    filters_applied: dict[str, Any] = Field(default_factory=dict)
+    items: list[DrilldownItemSchema]
+    pagination: PaginationSchema
+    aggregation: AggregationSchema
+
+
+# ---------------------------------------------------------------------------
+# Metrics Alerting Schemas (P5.M3.T4)
+# ---------------------------------------------------------------------------
+
+
+class MetricsAlertSchema(BaseModel):
+    id: str
+    project_id: str
+    metric_key: str
+    alert_type: Literal["threshold", "anomaly"]
+    severity: Literal["warning", "critical", "emergency"]
+    value: float
+    threshold: float | None = None
+    context: dict[str, Any] = Field(default_factory=dict)
+    created_at: str
+    acknowledged_at: str | None = None
+
+
+class MetricsAlertListResponse(BaseModel):
+    items: list[MetricsAlertSchema]
+
+
+class AcknowledgeAlertResponse(BaseModel):
+    id: str
+    acknowledged_at: str
+
+
+# ---------------------------------------------------------------------------
+# Workflow Actions Schemas (P5.M3.T5)
+# ---------------------------------------------------------------------------
+
+
+class WorkflowSuggestion(BaseModel):
+    action_type: Literal["reroute_reviewer", "escalate"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    affected_tasks: list[str] = Field(default_factory=list)
+    rationale: str
+    evidence_refs: list[str] = Field(default_factory=list)
+
+
+class WorkflowActionsResponse(BaseModel):
+    version: str = "1.0"
+    project_id: str
+    suggestions: list[WorkflowSuggestion]
+
+
+# ---------------------------------------------------------------------------
+# Milestone Health & Forecast Schemas (P5.M3.T3)
+# ---------------------------------------------------------------------------
+
+
+class MilestoneTaskSummary(BaseModel):
+    total: int
+    completed: int
+    remaining: int
+    avg_cycle_time_hours: float
+
+
+class MilestoneHealthItem(BaseModel):
+    milestone_id: str
+    name: str
+    health_score: float | None = None
+    health_status: str
+    breach_probability: float
+    task_summary: MilestoneTaskSummary
+
+
+class MetricsHealthResponse(BaseModel):
+    version: str = "1.0"
+    project_id: str
+    milestones: list[MilestoneHealthItem]

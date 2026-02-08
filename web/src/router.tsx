@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import PageShell from "@/components/templates/PageShell";
 import NotFoundPage from "@/pages/NotFoundPage";
 import ProjectsPage from "@/pages/ProjectsPage";
+import MetricsPage from "@/pages/MetricsPage";
 import WorkspacePage from "@/pages/WorkspacePage";
 
 // ---------------------------------------------------------------------------
@@ -19,6 +20,10 @@ export const router = createBrowserRouter([
       {
         path: "projects/:projectId/checkpoints",
         element: <WorkspacePage />,
+      },
+      {
+        path: "projects/:projectId/metrics",
+        element: <MetricsPage />,
       },
       {
         path: "projects/:projectId/tasks/:taskId",

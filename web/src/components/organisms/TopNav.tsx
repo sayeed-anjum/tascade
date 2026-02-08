@@ -114,6 +114,24 @@ export default function TopNav({
           </SelectContent>
         </Select>
 
+        {/* Project navigation links */}
+        {projectId && (
+          <nav aria-label="Project navigation" className="flex items-center gap-2">
+            <Link
+              to={`/projects/${projectId}/tasks`}
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Tasks
+            </Link>
+            <Link
+              to={`/projects/${projectId}/metrics`}
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Metrics
+            </Link>
+          </nav>
+        )}
+
         {/* Spacer */}
         <div className="flex-1" />
       </div>

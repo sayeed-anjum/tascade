@@ -24,6 +24,12 @@ from app.models import (
     IntegrationResult,
     LeaseModel,
     LeaseStatus,
+    MetricsAlertModel,
+    MetricsBreakdownPointModel,
+    MetricsDrilldownModel,
+    MetricsSummaryModel,
+    MetricsTimeGrain,
+    MetricsTrendPointModel,
     MilestoneModel,
     PhaseModel,
     PlanChangeSetModel,
@@ -1832,6 +1838,456 @@ class SqlStore:
             caused_by=caused_by,
         )
         session.add(event)
+
+    # ------------------------------------------------------------------
+    # Metrics read-model queries (P5.M3.T1)
+    # ------------------------------------------------------------------
+
+    def get_metrics_summary(
+        self,
+        project_id: str,
+        timestamp: datetime | None = None,
+    ) -> dict[str, Any] | None:
+        with SessionLocal() as session:
+            query = (
+                select(MetricsSummaryModel)
+                .where(MetricsSummaryModel.project_id == project_id)
+            )
+            if timestamp is not None:
+                query = query.where(MetricsSummaryModel.captured_at <= timestamp)
+            query = query.order_by(MetricsSummaryModel.captured_at.desc()).limit(1)
+            row = session.execute(query).scalar_one_or_none()
+            if row is None:
+                return None
+            return {
+                "project_id": row.project_id,
+                "timestamp": _iso(row.captured_at),
+                "payload": row.payload,
+            }
+
+    def get_metrics_trends(
+        self,
+        project_id: str,
+        metric: str,
+        start_date: str,
+        end_date: str,
+        granularity: str = "day",
+        dimensions: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        with SessionLocal() as session:
+            start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+            end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+            # For date-only strings, ensure they are timezone-aware
+            if start_dt.tzinfo is None:
+                start_dt = start_dt.replace(tzinfo=timezone.utc)
+            if end_dt.tzinfo is None:
+                end_dt = end_dt.replace(tzinfo=timezone.utc)
+
+            grain_map = {
+                "hour": MetricsTimeGrain.HOUR,
+                "day": MetricsTimeGrain.DAY,
+                "week": MetricsTimeGrain.WEEK,
+                "month": MetricsTimeGrain.MONTH,
+            }
+            grain = grain_map.get(granularity, MetricsTimeGrain.DAY)
+
+            query = (
+                select(MetricsTrendPointModel)
+                .where(
+                    MetricsTrendPointModel.project_id == project_id,
+                    MetricsTrendPointModel.metric_key == metric,
+                    MetricsTrendPointModel.time_grain == grain,
+                    MetricsTrendPointModel.time_bucket >= start_dt,
+                    MetricsTrendPointModel.time_bucket < end_dt,
+                )
+                .order_by(MetricsTrendPointModel.time_bucket.asc())
+            )
+            rows = session.execute(query).scalars().all()
+            results: list[dict[str, Any]] = []
+            for row in rows:
+                point: dict[str, Any] = {
+                    "timestamp": _iso(row.time_bucket),
+                    "value": row.value_numeric if row.value_numeric is not None else 0,
+                }
+                if row.dimensions:
+                    point["dimensions"] = row.dimensions
+                if row.value_json:
+                    point["metadata"] = row.value_json
+                results.append(point)
+            return results
+
+    _TIME_RANGE_MAP: dict[str, timedelta] = {
+        "24h": timedelta(hours=24),
+        "7d": timedelta(days=7),
+        "30d": timedelta(days=30),
+        "90d": timedelta(days=90),
+    }
+
+    def get_metrics_breakdown(
+        self,
+        project_id: str,
+        metric: str,
+        dimension: str,
+        time_range: str = "7d",
+        filters: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        with SessionLocal() as session:
+            query = (
+                select(MetricsBreakdownPointModel)
+                .where(
+                    MetricsBreakdownPointModel.project_id == project_id,
+                    MetricsBreakdownPointModel.metric_key == metric,
+                    MetricsBreakdownPointModel.dimension_key == dimension,
+                )
+            )
+
+            # Filter by time_range if provided and recognized
+            td = self._TIME_RANGE_MAP.get(time_range)
+            if td is not None:
+                cutoff = _now() - td
+                query = query.where(MetricsBreakdownPointModel.time_bucket >= cutoff)
+
+            query = query.order_by(MetricsBreakdownPointModel.value_numeric.desc())
+            rows = session.execute(query).scalars().all()
+
+            total = sum(row.value_numeric or 0 for row in rows)
+            breakdown: list[dict[str, Any]] = []
+            for row in rows:
+                value = row.value_numeric or 0
+                pct = (row.value_json or {}).get("percentage", 0)
+                if pct == 0 and total > 0:
+                    pct = round(value / total * 100, 1)
+                item: dict[str, Any] = {
+                    "dimension_value": row.dimension_value,
+                    "value": value,
+                    "percentage": pct,
+                    "count": int((row.value_json or {}).get("count", 0)),
+                }
+                trend = (row.value_json or {}).get("trend")
+                if trend:
+                    item["trend"] = trend
+                breakdown.append(item)
+
+            return {
+                "total": total,
+                "breakdown": breakdown,
+            }
+
+    def get_metrics_drilldown(
+        self,
+        project_id: str,
+        metric: str,
+        filters: dict[str, Any] | None = None,
+        sort_by: str = "value",
+        sort_order: str = "desc",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        if limit > 500:
+            limit = 500
+
+        with SessionLocal() as session:
+            # Build base WHERE conditions
+            conditions = [
+                MetricsDrilldownModel.project_id == project_id,
+                MetricsDrilldownModel.metric_key == metric,
+            ]
+
+            # Apply filters against known columns (metric_key, entity_type)
+            if filters:
+                if "metric_key" in filters:
+                    conditions.append(MetricsDrilldownModel.metric_key == filters["metric_key"])
+                if "entity_type" in filters:
+                    conditions.append(MetricsDrilldownModel.entity_type == filters["entity_type"])
+
+            # Count total via separate query
+            count_query = select(func.count()).select_from(MetricsDrilldownModel).where(*conditions)
+            total = session.execute(count_query).scalar_one()
+
+            # Aggregation via SQL aggregate functions
+            agg_query = select(
+                func.sum(MetricsDrilldownModel.payload["value"].as_float()),
+                func.avg(MetricsDrilldownModel.payload["value"].as_float()),
+                func.min(MetricsDrilldownModel.payload["value"].as_float()),
+                func.max(MetricsDrilldownModel.payload["value"].as_float()),
+            ).where(*conditions)
+
+            try:
+                agg_row = session.execute(agg_query).one()
+                agg_sum = agg_row[0]
+            except Exception:
+                agg_sum = None
+
+            if agg_sum is not None:
+                agg = {
+                    "sum": round(float(agg_row[0] or 0), 6),
+                    "avg": round(float(agg_row[1] or 0), 6),
+                    "min": float(agg_row[2] or 0),
+                    "max": float(agg_row[3] or 0),
+                }
+                # Percentiles: fetch only values for the matching subset
+                val_query = (
+                    select(MetricsDrilldownModel.payload)
+                    .where(*conditions)
+                    .order_by(MetricsDrilldownModel.payload["value"].as_float().asc())
+                )
+                val_rows = session.execute(val_query).scalars().all()
+                sorted_vals = [float((p or {}).get("value", 0)) for p in val_rows]
+                n = len(sorted_vals)
+                agg["p50"] = sorted_vals[int(n * 0.5)] if n > 0 else 0
+                agg["p90"] = sorted_vals[min(int(n * 0.9), n - 1)] if n > 0 else 0
+                agg["p95"] = sorted_vals[min(int(n * 0.95), n - 1)] if n > 0 else 0
+            else:
+                agg = {"sum": 0, "avg": 0, "min": 0, "max": 0, "p50": 0, "p90": 0, "p95": 0}
+
+            # Build paginated query with ORDER BY, LIMIT, OFFSET pushed to SQL
+            data_query = select(MetricsDrilldownModel).where(*conditions)
+
+            order_dir = MetricsDrilldownModel.payload["value"].as_float().desc()
+            if sort_by == "timestamp":
+                col = MetricsDrilldownModel.time_bucket
+                order_dir = col.desc() if sort_order == "desc" else col.asc()
+            elif sort_by == "task_id":
+                col = MetricsDrilldownModel.entity_id
+                order_dir = col.desc() if sort_order == "desc" else col.asc()
+            else:  # value
+                col_expr = MetricsDrilldownModel.payload["value"].as_float()
+                order_dir = col_expr.desc() if sort_order == "desc" else col_expr.asc()
+
+            data_query = data_query.order_by(order_dir).limit(limit).offset(offset)
+            rows = session.execute(data_query).scalars().all()
+
+            items: list[dict[str, Any]] = []
+            for row in rows:
+                p = row.payload or {}
+                items.append({
+                    "task_id": p.get("task_id", row.entity_id or ""),
+                    "task_title": p.get("task_title", ""),
+                    "value": float(p.get("value", 0)),
+                    "timestamp": p.get("timestamp", _iso(row.time_bucket) or ""),
+                    "context": p.get("context", {}),
+                    "contributing_factors": p.get("contributing_factors", []),
+                })
+
+            return {
+                "items": items,
+                "pagination": {
+                    "total": total,
+                    "limit": limit,
+                    "offset": offset,
+                    "has_more": (offset + limit) < total,
+                },
+                "aggregation": agg,
+            }
+
+
+    # ------------------------------------------------------------------
+    # Metrics Alerting (P5.M3.T4)
+    # ------------------------------------------------------------------
+
+    def create_alert(
+        self,
+        project_id: str,
+        metric_key: str,
+        alert_type: str,
+        severity: str,
+        value: float,
+        threshold: float | None,
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        with SessionLocal.begin() as session:
+            alert = MetricsAlertModel(
+                project_id=project_id,
+                metric_key=metric_key,
+                alert_type=alert_type,
+                severity=severity,
+                value=value,
+                threshold=threshold,
+                context=context or {},
+                created_at=_now(),
+            )
+            session.add(alert)
+            session.flush()
+            return _alert_to_dict(alert)
+
+    def list_alerts(
+        self,
+        project_id: str,
+        acknowledged: bool | None = None,
+        severity: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        with SessionLocal() as session:
+            query = (
+                select(MetricsAlertModel)
+                .where(MetricsAlertModel.project_id == project_id)
+            )
+            if acknowledged is not None:
+                if acknowledged:
+                    query = query.where(MetricsAlertModel.acknowledged_at.isnot(None))
+                else:
+                    query = query.where(MetricsAlertModel.acknowledged_at.is_(None))
+            if severity is not None:
+                query = query.where(MetricsAlertModel.severity == severity)
+            query = query.order_by(MetricsAlertModel.created_at.desc()).limit(limit)
+            rows = session.execute(query).scalars().all()
+            return [_alert_to_dict(row) for row in rows]
+
+    def acknowledge_alert(self, alert_id: str) -> dict[str, Any]:
+        with SessionLocal.begin() as session:
+            alert = session.get(MetricsAlertModel, alert_id)
+            if alert is None:
+                raise KeyError("ALERT_NOT_FOUND")
+            alert.acknowledged_at = _now()
+            session.flush()
+            return _alert_to_dict(alert)
+
+
+    # ------------------------------------------------------------------
+    # Workflow Actions (P5.M3.T5)
+    # ------------------------------------------------------------------
+
+    def get_suggestion_data(
+        self,
+        project_id: str,
+    ) -> dict[str, Any] | None:
+        """Retrieve the latest metrics summary and unacknowledged alerts
+        needed by the suggestion engine.
+
+        Returns ``None`` when no metrics summary exists for the project.
+        """
+        summary = self.get_metrics_summary(project_id)
+        if summary is None:
+            return None
+
+        alerts = self.list_alerts(project_id, acknowledged=False)
+
+        return {
+            "summary": summary.get("payload", {}),
+            "alerts": alerts,
+        }
+
+
+    # ------------------------------------------------------------------
+    # Milestone Health & Forecast (P5.M3.T3)
+    # ------------------------------------------------------------------
+
+    def get_milestone_health(self, project_id: str) -> list[dict[str, Any]]:
+        """Compute health and breach probability per milestone.
+
+        Returns a list of dicts with keys: milestone_id, milestone_name,
+        health_score, health_status, breach_probability, remaining_tasks,
+        total_tasks, avg_cycle_time_hours.
+        """
+        from app.metrics.forecast import breach_probability as _breach_prob, milestone_health_score
+
+        with SessionLocal() as session:
+            milestones = session.execute(
+                select(MilestoneModel).where(MilestoneModel.project_id == project_id)
+                .order_by(MilestoneModel.sequence)
+            ).scalars().all()
+
+            if not milestones:
+                return []
+
+            milestone_ids = [ms.id for ms in milestones]
+
+            tasks = session.execute(
+                select(TaskModel).where(
+                    TaskModel.project_id == project_id,
+                    TaskModel.milestone_id.in_(milestone_ids),
+                )
+            ).scalars().all()
+
+            tasks_by_milestone: dict[str, list[TaskModel]] = {}
+            for task in tasks:
+                if task.milestone_id:
+                    tasks_by_milestone.setdefault(task.milestone_id, []).append(task)
+
+            completed_states = {TaskState.INTEGRATED, TaskState.CANCELLED, TaskState.ABANDONED}
+            results: list[dict[str, Any]] = []
+
+            for ms in milestones:
+                ms_tasks = tasks_by_milestone.get(ms.id, [])
+                total = len(ms_tasks)
+                completed = sum(1 for t in ms_tasks if t.state in completed_states)
+                remaining = total - completed
+
+                # Compute cycle times from completed tasks
+                cycle_times: list[float] = []
+                for t in ms_tasks:
+                    if t.state in completed_states and t.created_at and t.updated_at:
+                        created = t.created_at
+                        updated = t.updated_at
+                        if created.tzinfo is None:
+                            created = created.replace(tzinfo=__import__("datetime").timezone.utc)
+                        if updated.tzinfo is None:
+                            updated = updated.replace(tzinfo=__import__("datetime").timezone.utc)
+                        ct_hours = max((updated - created).total_seconds() / 3600, 0.0)
+                        cycle_times.append(ct_hours)
+
+                avg_cycle = sum(cycle_times) / len(cycle_times) if cycle_times else 24.0
+                stddev = 0.0
+                if len(cycle_times) > 1:
+                    mean_ct = avg_cycle
+                    variance = sum((ct - mean_ct) ** 2 for ct in cycle_times) / len(cycle_times)
+                    stddev = variance ** 0.5
+                elif cycle_times:
+                    stddev = avg_cycle * 0.3
+                else:
+                    stddev = avg_cycle * 0.3
+
+                # Health score: ratio-based using completion fraction
+                if total > 0:
+                    ratio = completed / total
+                    health = milestone_health_score(ratio, ratio, ratio, ratio)
+                else:
+                    health = None
+
+                # Health status thresholds
+                if health is not None:
+                    if health >= 0.70:
+                        status = "green"
+                    elif health >= 0.50:
+                        status = "yellow"
+                    else:
+                        status = "red"
+                else:
+                    status = "red"
+
+                # Breach probability: estimate with 168h (1 week) default window
+                bp = 0.0
+                if remaining > 0:
+                    deadline_hours = 168.0  # default 1-week horizon
+                    bp = _breach_prob(remaining, avg_cycle, deadline_hours, stddev)
+
+                results.append({
+                    "milestone_id": ms.id,
+                    "milestone_name": ms.name,
+                    "health_score": health,
+                    "health_status": status,
+                    "breach_probability": round(bp, 4),
+                    "remaining_tasks": remaining,
+                    "total_tasks": total,
+                    "avg_cycle_time_hours": round(avg_cycle, 2),
+                })
+
+            return results
+
+
+def _alert_to_dict(model: MetricsAlertModel) -> dict[str, Any]:
+    return {
+        "id": model.id,
+        "project_id": model.project_id,
+        "metric_key": model.metric_key,
+        "alert_type": model.alert_type,
+        "severity": model.severity,
+        "value": model.value,
+        "threshold": model.threshold,
+        "context": model.context or {},
+        "created_at": _iso(model.created_at),
+        "acknowledged_at": _iso(model.acknowledged_at),
+    }
 
 
 STORE = SqlStore()

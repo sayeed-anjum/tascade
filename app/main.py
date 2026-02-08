@@ -1,11 +1,17 @@
+import json
 import pathlib
 import uuid
+from datetime import datetime
+from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.auth.permissions import require_permission
+
 from app.schemas import (
+    AcknowledgeAlertResponse,
     ApplyPlanChangesetRequest,
     ApplyPlanChangesetResponse,
     Artifact,
@@ -34,6 +40,15 @@ from app.schemas import (
     ListIntegrationAttemptsResponse,
     ListProjectsResponse,
     ListTasksResponse,
+    MetricsAlertListResponse,
+    MetricsAlertSchema,
+    MetricsBreakdownResponse,
+    MetricsDrilldownResponse,
+    MetricsHealthResponse,
+    MetricsSummaryResponse,
+    MetricsTrendsResponse,
+    MilestoneHealthItem,
+    MilestoneTaskSummary,
     PlanChangeset,
     PlanVersion,
     Project,
@@ -50,6 +65,8 @@ from app.schemas import (
     CreateApiKeyResponse,
     ListApiKeysResponse,
     RevokeApiKeyResponse,
+    WorkflowActionsResponse,
+    WorkflowSuggestion,
 )
 from app.auth import AuthContext, get_auth_context, hash_api_key, require_role, VALID_ROLES
 from app.store import STORE
@@ -956,6 +973,318 @@ def revoke_api_key(
         id=record["id"],
         status=record["status"],
         revoked_at=record["revoked_at"],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Metrics API endpoints (P5.M3.T1)
+# ---------------------------------------------------------------------------
+
+_API_VERSION_HEADER = "1.0"
+
+
+@app.get("/v1/metrics/summary", response_model=MetricsSummaryResponse)
+def get_metrics_summary(
+    response: Response,
+    project_id: str = Query(...),
+    timestamp: str | None = Query(None),
+    _perm: None = Depends(require_permission("summary")),
+) -> MetricsSummaryResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    ts = None
+    if timestamp is not None:
+        try:
+            ts = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=ErrorResponse(
+                    error={"code": "BAD_REQUEST", "message": "Invalid timestamp format", "retryable": False}
+                ).model_dump(),
+            )
+    result = STORE.get_metrics_summary(project_id, timestamp=ts)
+    response.headers["X-API-Version"] = _API_VERSION_HEADER
+    if result is None:
+        return MetricsSummaryResponse(
+            project_id=project_id,
+            timestamp=timestamp or "",
+            metrics={},
+        )
+    return MetricsSummaryResponse(
+        project_id=result["project_id"],
+        timestamp=result["timestamp"] or "",
+        metrics=result["payload"] or {},
+    )
+
+
+@app.get("/v1/metrics/trends", response_model=MetricsTrendsResponse)
+def get_metrics_trends(
+    response: Response,
+    project_id: str = Query(...),
+    metric: str = Query(...),
+    start_date: str = Query(...),
+    end_date: str = Query(...),
+    granularity: Literal["hour", "day", "week", "month"] = Query("day"),
+    dimensions: str | None = Query(None),
+    _perm: None = Depends(require_permission("trends")),
+) -> MetricsTrendsResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    dim_list = [d.strip() for d in dimensions.split(",") if d.strip()] if dimensions else []
+    data = STORE.get_metrics_trends(
+        project_id=project_id,
+        metric=metric,
+        start_date=start_date,
+        end_date=end_date,
+        granularity=granularity,
+        dimensions=dim_list or None,
+    )
+    response.headers["X-API-Version"] = _API_VERSION_HEADER
+    return MetricsTrendsResponse(
+        project_id=project_id,
+        metric=metric,
+        granularity=granularity,
+        start_date=start_date,
+        end_date=end_date,
+        data=data,
+    )
+
+
+@app.get("/v1/metrics/breakdown", response_model=MetricsBreakdownResponse)
+def get_metrics_breakdown(
+    response: Response,
+    project_id: str = Query(...),
+    metric: str = Query(...),
+    dimension: str = Query(...),
+    time_range: Literal["24h", "7d", "30d", "90d"] = Query("7d"),
+    filters: str | None = Query(None),
+    _perm: None = Depends(require_permission("breakdown")),
+) -> MetricsBreakdownResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    filter_dict = None
+    if filters:
+        try:
+            filter_dict = json.loads(filters)
+        except json.JSONDecodeError:
+            raise HTTPException(
+                status_code=400,
+                detail=ErrorResponse(
+                    error={"code": "BAD_REQUEST", "message": "Invalid filters JSON", "retryable": False}
+                ).model_dump(),
+            )
+    result = STORE.get_metrics_breakdown(
+        project_id=project_id,
+        metric=metric,
+        dimension=dimension,
+        time_range=time_range,
+        filters=filter_dict,
+    )
+    response.headers["X-API-Version"] = _API_VERSION_HEADER
+    return MetricsBreakdownResponse(
+        project_id=project_id,
+        metric=metric,
+        dimension=dimension,
+        time_range=time_range,
+        total=result["total"],
+        breakdown=result["breakdown"],
+    )
+
+
+@app.get("/v1/metrics/drilldown", response_model=MetricsDrilldownResponse)
+def get_metrics_drilldown(
+    response: Response,
+    project_id: str = Query(...),
+    metric: str = Query(...),
+    filters: str | None = Query(None),
+    sort_by: Literal["value", "timestamp", "task_id"] = Query("value"),
+    sort_order: Literal["asc", "desc"] = Query("desc"),
+    limit: int = Query(50, ge=1),
+    offset: int = Query(0, ge=0),
+    _perm: None = Depends(require_permission("drilldown")),
+) -> MetricsDrilldownResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    filter_dict = None
+    if filters:
+        try:
+            filter_dict = json.loads(filters)
+        except json.JSONDecodeError:
+            raise HTTPException(
+                status_code=400,
+                detail=ErrorResponse(
+                    error={"code": "BAD_REQUEST", "message": "Invalid filters JSON", "retryable": False}
+                ).model_dump(),
+            )
+    result = STORE.get_metrics_drilldown(
+        project_id=project_id,
+        metric=metric,
+        filters=filter_dict,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        limit=limit,
+        offset=offset,
+    )
+    response.headers["X-API-Version"] = _API_VERSION_HEADER
+    return MetricsDrilldownResponse(
+        project_id=project_id,
+        metric=metric,
+        filters_applied=filter_dict or {},
+        items=result["items"],
+        pagination=result["pagination"],
+        aggregation=result["aggregation"],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Metrics Alerting endpoints (P5.M3.T4)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/v1/metrics/alerts", response_model=MetricsAlertListResponse)
+def list_metrics_alerts(
+    response: Response,
+    project_id: str = Query(...),
+    severity: str | None = Query(None),
+    acknowledged: str | None = Query(None),
+    limit: int = Query(50),
+    _perm: None = Depends(require_permission("alerts")),
+) -> MetricsAlertListResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    if severity is not None and severity not in {"warning", "critical", "emergency"}:
+        raise HTTPException(
+            status_code=400,
+            detail=ErrorResponse(
+                error={"code": "BAD_REQUEST", "message": "Invalid severity filter", "retryable": False}
+            ).model_dump(),
+        )
+    ack_filter: bool | None = None
+    if acknowledged is not None:
+        ack_filter = acknowledged.lower() in ("true", "1", "yes")
+    items = STORE.list_alerts(
+        project_id=project_id,
+        acknowledged=ack_filter,
+        severity=severity,
+        limit=limit,
+    )
+    response.headers["X-API-Version"] = _API_VERSION_HEADER
+    return MetricsAlertListResponse(items=[MetricsAlertSchema(**item) for item in items])
+
+
+@app.post("/v1/metrics/alerts/{alert_id}/acknowledge", response_model=AcknowledgeAlertResponse)
+def acknowledge_alert(
+    alert_id: str,
+    response: Response,
+    _perm: None = Depends(require_permission("alerts:acknowledge")),
+) -> AcknowledgeAlertResponse:
+    try:
+        result = STORE.acknowledge_alert(alert_id)
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "ALERT_NOT_FOUND", "message": "Alert not found", "retryable": False}
+            ).model_dump(),
+        )
+    response.headers["X-API-Version"] = _API_VERSION_HEADER
+    return AcknowledgeAlertResponse(id=result["id"], acknowledged_at=result["acknowledged_at"])
+
+
+# ---------------------------------------------------------------------------
+# Workflow Actions endpoint (P5.M3.T5)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/v1/metrics/actions", response_model=WorkflowActionsResponse)
+def get_workflow_actions(
+    response: Response,
+    project_id: str = Query(...),
+    _perm: None = Depends(require_permission("actions")),
+) -> WorkflowActionsResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    from app.metrics.actions import SuggestionEngine
+
+    engine = SuggestionEngine()
+    suggestions = engine.evaluate(project_id, STORE)
+    response.headers["X-API-Version"] = _API_VERSION_HEADER
+    return WorkflowActionsResponse(
+        project_id=project_id,
+        suggestions=[WorkflowSuggestion(**s) for s in suggestions],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Milestone Health & Forecast (P5.M3.T3)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/v1/metrics/health", response_model=MetricsHealthResponse)
+def get_metrics_health(
+    response: Response,
+    project_id: str = Query(...),
+    _perm: None = Depends(require_permission("health")),
+) -> MetricsHealthResponse:
+    if not STORE.project_exists(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    rows = STORE.get_milestone_health(project_id)
+    response.headers["X-API-Version"] = _API_VERSION_HEADER
+    milestones = [
+        MilestoneHealthItem(
+            milestone_id=row["milestone_id"],
+            name=row["milestone_name"],
+            health_score=row["health_score"],
+            health_status=row["health_status"],
+            breach_probability=row["breach_probability"],
+            task_summary=MilestoneTaskSummary(
+                total=row["total_tasks"],
+                completed=row["total_tasks"] - row["remaining_tasks"],
+                remaining=row["remaining_tasks"],
+                avg_cycle_time_hours=row["avg_cycle_time_hours"],
+            ),
+        )
+        for row in rows
+    ]
+    return MetricsHealthResponse(
+        project_id=project_id,
+        milestones=milestones,
     )
 
 
