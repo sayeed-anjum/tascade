@@ -1247,7 +1247,7 @@ ON gate_decisions(status, gate_type, created_at);
 
 ## Document Sign-off
 
-This document specifies the canonical formulas, dimensions, and SLA targets for all 18 MVP metrics. It serves as the technical reference for implementation tasks P5.M2.T1 (Computation Layer) and P5.M3.T1 (Metrics API).
+This document specifies the canonical formulas, dimensions, and SLA targets for all 16 MVP metrics. It serves as the technical reference for implementation tasks P5.M2.T1 (Computation Layer) and P5.M3.T1 (Metrics API).
 
 **Next Steps:**
 1. P5.M1.T6: Map formula inputs to source data tables

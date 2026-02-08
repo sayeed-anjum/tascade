@@ -1271,7 +1271,7 @@ backlog → ready → reserved → claimed → in_progress → implemented → i
 | ACT-8 | Quality Gate Override Suggestion | ✅ | ✅ | ✅ |
 
 **Validation Summary:**
-- ✅ All 25 MVP metrics have complete field-level lineage
+- ✅ All 16 MVP metrics have complete field-level lineage
 - ✅ All nullable fields have specified handling strategies
 - ✅ All formula transformations are documented with SQL examples
 - ✅ All source tables are from schema-v0.1.sql
@@ -1447,7 +1447,7 @@ WITH RECURSIVE dependency_path AS (
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | 2026-02-08 | Subagent (P5.M1.T6) | Initial source mapping for all 25 MVP metrics |
+| 1.0 | 2026-02-08 | Subagent (P5.M1.T6) | Initial source mapping for all 16 MVP metrics |
 
 ### Related Documents
 
