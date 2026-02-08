@@ -11,7 +11,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.db import SessionLocal
 from app.metrics import calculators
@@ -338,7 +338,14 @@ def materialize_metrics(project_id: str) -> dict[str, Any]:
         session.flush()
         summary_id = summary.id
 
-        # 2. MetricsTrendPointModel rows
+        # 2. MetricsTrendPointModel rows — delete stale daily points first
+        session.execute(
+            delete(MetricsTrendPointModel).where(
+                MetricsTrendPointModel.project_id == project_id,
+                MetricsTrendPointModel.time_grain == MetricsTimeGrain.DAY,
+                MetricsTrendPointModel.time_bucket == today_start,
+            )
+        )
         trend_metrics = {
             "delivery_predictability_index": dpi_pct,
             "flow_efficiency_score": fes_pct,
@@ -361,6 +368,13 @@ def materialize_metrics(project_id: str) -> dict[str, Any]:
             trend_count += 1
 
         # 3. MetricsBreakdownPointModel rows for throughput by phase
+        # Delete stale breakdown rows first
+        session.execute(
+            delete(MetricsBreakdownPointModel).where(
+                MetricsBreakdownPointModel.project_id == project_id,
+                MetricsBreakdownPointModel.time_bucket == today_start,
+            )
+        )
         # Gather task counts per phase
         phase_task_counter: dict[str | None, int] = Counter()
         for t in tasks:
@@ -496,6 +510,14 @@ def backfill_hourly_trends(project_id: str) -> int:
         )
         if not tasks:
             return 0
+
+        # Delete existing hourly trend points so re-runs are idempotent
+        session.execute(
+            delete(MetricsTrendPointModel).where(
+                MetricsTrendPointModel.project_id == project_id,
+                MetricsTrendPointModel.time_grain == MetricsTimeGrain.HOUR,
+            )
+        )
 
         earliest = min(_ensure_aware(t.created_at) for t in tasks)
         # Round down to the hour
