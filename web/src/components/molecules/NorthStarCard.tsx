@@ -3,8 +3,14 @@
 // health colour coding (green / yellow / red) based on configurable thresholds.
 // ---------------------------------------------------------------------------
 
+import { Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/ui/tooltip';
 import type { TrendDirection } from '@/types/metrics';
 
 export interface NorthStarCardProps {
@@ -16,6 +22,8 @@ export interface NorthStarCardProps {
   changePct: number;
   /** [yellow threshold, green threshold]. Values >= green are green, >= yellow are yellow, else red. */
   thresholds?: [number, number];
+  /** Help text shown in a tooltip next to the title. */
+  description?: string;
 }
 
 const TREND_ARROWS: Record<TrendDirection, string> = {
@@ -48,6 +56,7 @@ export default function NorthStarCard({
   trend,
   changePct,
   thresholds = [50, 75],
+  description,
 }: NorthStarCardProps) {
   const colorClass = healthColor(value, thresholds);
 
@@ -55,7 +64,19 @@ export default function NorthStarCard({
     <Card>
       <CardHeader>
         <CardTitle className="text-sm font-medium text-muted-foreground">
-          {title}
+          <span className="flex items-center gap-1.5">
+            {title}
+            {description && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3.5 w-3.5 shrink-0 cursor-help text-muted-foreground/70" />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs text-xs">
+                  {description}
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent>
