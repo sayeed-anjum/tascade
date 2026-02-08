@@ -158,6 +158,18 @@ REQUIRED_SCHEMA: dict[str, set[str]] = {
         "candidate_order",
         "created_at",
     },
+    "api_key": {
+        "id",
+        "project_id",
+        "name",
+        "hash",
+        "role_scopes",
+        "status",
+        "created_by",
+        "created_at",
+        "last_used_at",
+        "revoked_at",
+    },
 }
 
 

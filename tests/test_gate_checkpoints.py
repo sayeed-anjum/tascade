@@ -220,6 +220,58 @@ def test_list_gate_checkpoints_supports_filters_and_pagination_and_excludes_clos
     assert [item["task_id"] for item in paged.json()["items"]] == [gate_review]
 
 
+def test_list_gate_checkpoints_include_completed_returns_closed_gates():
+    client = TestClient(app)
+    project_id = _create_project(client, "gate-checkpoints-include-completed-proj")
+
+    phase = STORE.create_phase(project_id=project_id, name="Phase 1", sequence=0)
+    milestone = STORE.create_milestone(
+        project_id=project_id,
+        name="Milestone 1",
+        sequence=0,
+        phase_id=phase["id"],
+    )
+
+    open_gate = _create_gate_task(
+        client,
+        project_id=project_id,
+        phase_id=phase["id"],
+        milestone_id=milestone["id"],
+        title="Open checkpoint",
+        task_class="review_gate",
+    )
+
+    closed_gate = _create_gate_task(
+        client,
+        project_id=project_id,
+        phase_id=phase["id"],
+        milestone_id=milestone["id"],
+        title="Closed checkpoint",
+        task_class="merge_gate",
+    )
+    _force_state(client, project_id=project_id, task_id=closed_gate, new_state="integrated")
+
+    # Default: excludes completed
+    without = client.get(f"/v1/gates/checkpoints?project_id={project_id}")
+    assert without.status_code == 200
+    assert len(without.json()["items"]) == 1
+    assert without.json()["items"][0]["task_id"] == open_gate
+
+    # With include_completed=true: includes completed
+    with_completed = client.get(
+        f"/v1/gates/checkpoints?project_id={project_id}&include_completed=true"
+    )
+    assert with_completed.status_code == 200
+    assert len(with_completed.json()["items"]) == 2
+    task_ids = {item["task_id"] for item in with_completed.json()["items"]}
+    assert open_gate in task_ids
+    assert closed_gate in task_ids
+    closed_item = next(
+        item for item in with_completed.json()["items"] if item["task_id"] == closed_gate
+    )
+    assert closed_item["state"] == "integrated"
+
+
 def test_list_gate_checkpoints_returns_not_found_for_unknown_project():
     client = TestClient(app)
 

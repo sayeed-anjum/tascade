@@ -626,9 +626,9 @@ paths:
 components:
   securitySchemes:
     ApiKeyAuth:
-      type: apiKey
-      in: header
-      name: X-API-Key
+      type: http
+      scheme: bearer
+      description: "API key passed as Bearer token (e.g. Authorization: Bearer tsk_...)"
 
   parameters:
     IdempotencyKey:

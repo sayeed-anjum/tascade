@@ -470,3 +470,47 @@ class ProjectGraphResponse(BaseModel):
     milestones: list[Milestone]
     tasks: list[GraphTask]
     dependencies: list[DependencyEdge]
+
+
+# ---------------------------------------------------------------------------
+# API Key management
+# ---------------------------------------------------------------------------
+
+
+class CreateApiKeyRequest(BaseModel):
+    project_id: str
+    name: str = Field(min_length=1)
+    role_scopes: list[str]
+    created_by: str = Field(min_length=1)
+
+
+class CreateApiKeyResponse(BaseModel):
+    """Returned only at creation time -- contains the raw key."""
+    id: str
+    project_id: str
+    name: str
+    role_scopes: list[str]
+    raw_key: str
+    created_at: str
+
+
+class ApiKeyInfo(BaseModel):
+    id: str
+    project_id: str
+    name: str
+    role_scopes: list[str]
+    status: str
+    created_by: str
+    created_at: str
+    last_used_at: str | None = None
+    revoked_at: str | None = None
+
+
+class ListApiKeysResponse(BaseModel):
+    items: list[ApiKeyInfo]
+
+
+class RevokeApiKeyResponse(BaseModel):
+    id: str
+    status: str
+    revoked_at: str

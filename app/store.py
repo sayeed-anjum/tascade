@@ -10,6 +10,8 @@ from sqlalchemy import func, select
 
 from app.db import SessionLocal, init_db, reset_db
 from app.models import (
+    ApiKeyModel,
+    ApiKeyStatus,
     ArtifactModel,
     CheckStatus,
     DependencyEdgeModel,
@@ -880,6 +882,7 @@ class SqlStore:
         gate_type: str | None = None,
         phase_id: str | None = None,
         milestone_id: str | None = None,
+        include_completed: bool = False,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[dict[str, Any]], int]:
@@ -887,8 +890,9 @@ class SqlStore:
             query = select(TaskModel).where(
                 TaskModel.project_id == project_id,
                 TaskModel.task_class.in_([TaskClass.REVIEW_GATE, TaskClass.MERGE_GATE]),
-                TaskModel.state.in_(list(ACTIVE_GATE_STATES)),
             )
+            if not include_completed:
+                query = query.where(TaskModel.state.in_(list(ACTIVE_GATE_STATES)))
 
             if gate_type is not None:
                 query = query.where(TaskModel.task_class == TaskClass(gate_type))
@@ -1642,6 +1646,14 @@ class SqlStore:
         task.updated_at = _now()
         return material
 
+    def get_changeset_project_id(self, changeset_id: str) -> str:
+        """Return the project_id for a changeset, or raise KeyError."""
+        with SessionLocal() as session:
+            changeset = session.get(PlanChangeSetModel, changeset_id)
+            if changeset is None:
+                raise KeyError("CHANGESET_NOT_FOUND")
+            return changeset.project_id
+
     def apply_plan_changeset(
         self, changeset_id: str, allow_rebase: bool = False
     ) -> tuple[dict[str, Any], dict[str, Any], list[str], list[str]]:
@@ -1718,6 +1730,108 @@ class SqlStore:
                 invalid_claims,
                 invalid_reservations,
             )
+
+
+    # ------------------------------------------------------------------
+    # API key management
+    # ------------------------------------------------------------------
+
+    def create_api_key(
+        self, project_id: str, name: str, role_scopes: list[str], created_by: str, key_hash: str,
+    ) -> dict[str, Any]:
+        with SessionLocal() as session:
+            model = ApiKeyModel(
+                project_id=project_id,
+                name=name,
+                hash=key_hash,
+                role_scopes=role_scopes,
+                status=ApiKeyStatus.ACTIVE,
+                created_by=created_by,
+            )
+            session.add(model)
+            session.flush()
+            result = self._api_key_to_dict(model)
+            self._emit_event(
+                session,
+                project_id=project_id,
+                entity_type="api_key",
+                entity_id=model.id,
+                event_type="api_key_created",
+                payload={"name": name, "role_scopes": role_scopes},
+                caused_by=created_by,
+            )
+            session.commit()
+            return result
+
+    def list_api_keys(self, project_id: str) -> list[dict[str, Any]]:
+        with SessionLocal() as session:
+            rows = session.execute(
+                select(ApiKeyModel)
+                .where(ApiKeyModel.project_id == project_id)
+                .order_by(ApiKeyModel.created_at.desc())
+            ).scalars().all()
+            return [self._api_key_to_dict(row) for row in rows]
+
+    def revoke_api_key(self, key_id: str, project_id: str) -> dict[str, Any]:
+        with SessionLocal() as session:
+            model = session.execute(
+                select(ApiKeyModel).where(ApiKeyModel.id == key_id)
+            ).scalar_one_or_none()
+            if model is None:
+                raise KeyError("API_KEY_NOT_FOUND")
+            if model.project_id != project_id:
+                raise ValueError("PROJECT_MISMATCH")
+            if model.status == ApiKeyStatus.REVOKED:
+                raise ValueError("ALREADY_REVOKED")
+            model.status = ApiKeyStatus.REVOKED
+            model.revoked_at = _now()
+            session.flush()
+            result = self._api_key_to_dict(model)
+            self._emit_event(
+                session,
+                project_id=project_id,
+                entity_type="api_key",
+                entity_id=model.id,
+                event_type="api_key_revoked",
+                payload={"name": model.name},
+                caused_by=None,
+            )
+            session.commit()
+            return result
+
+    @staticmethod
+    def _api_key_to_dict(model: ApiKeyModel) -> dict[str, Any]:
+        return {
+            "id": model.id,
+            "project_id": model.project_id,
+            "name": model.name,
+            "role_scopes": list(model.role_scopes or []),
+            "status": model.status.value if hasattr(model.status, "value") else str(model.status),
+            "created_by": model.created_by,
+            "created_at": _iso(model.created_at),
+            "last_used_at": _iso(model.last_used_at) if model.last_used_at else None,
+            "revoked_at": _iso(model.revoked_at) if model.revoked_at else None,
+        }
+
+    def _emit_event(
+        self,
+        session: Any,
+        project_id: str,
+        entity_type: str,
+        entity_id: str | None,
+        event_type: str,
+        payload: dict[str, Any],
+        caused_by: str | None,
+    ) -> None:
+        event = EventLogModel(
+            project_id=project_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            event_type=event_type,
+            payload=payload,
+            caused_by=caused_by,
+        )
+        session.add(event)
 
 
 STORE = SqlStore()
