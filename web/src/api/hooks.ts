@@ -111,13 +111,21 @@ export function useGateDecisions(projectId: string | undefined) {
 
 // --- Checkpoints (gate checkpoint overview) ---------------------------------
 
-export function useCheckpoints(projectId: string | undefined) {
+export function useCheckpoints(
+  projectId: string | undefined,
+  includeCompleted: boolean = false,
+) {
   return useQuery({
-    queryKey: ["checkpoints", projectId],
-    queryFn: () =>
-      apiFetch<ListGateCheckpointsResponse>(
-        `/v1/gates/checkpoints?project_id=${projectId}`,
-      ),
+    queryKey: ["checkpoints", projectId, includeCompleted],
+    queryFn: () => {
+      const params = new URLSearchParams({ project_id: projectId! });
+      if (includeCompleted) {
+        params.set("include_completed", "true");
+      }
+      return apiFetch<ListGateCheckpointsResponse>(
+        `/v1/gates/checkpoints?${params.toString()}`,
+      );
+    },
     enabled: !!projectId,
     refetchInterval: 30_000,
   });

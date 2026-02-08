@@ -34,6 +34,8 @@ const READINESS_CLASSES: Record<string, string> = {
     "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
 };
 
+const COMPLETED_STATES = new Set(["integrated", "cancelled", "abandoned"]);
+
 // ---------------------------------------------------------------------------
 // Human-readable age string from age_hours.
 // ---------------------------------------------------------------------------
@@ -92,11 +94,12 @@ export default function CheckpointRow({ checkpoint }: CheckpointRowProps) {
   const readiness = deriveReadiness(checkpoint);
   const age = formatAge(checkpoint.age_hours);
   const sla = slaIndicator(checkpoint.age_hours);
+  const isCompleted = COMPLETED_STATES.has(checkpoint.state);
 
   const taskLabel = checkpoint.task_short_id ?? checkpoint.task_id.slice(0, 8);
 
   return (
-    <TableRow>
+    <TableRow className={cn(isCompleted && "opacity-50")}>
       {/* Task short_id as navigation link */}
       <TableCell>
         <Link

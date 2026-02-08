@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import { useCheckpoints } from "@/api/hooks";
+import { useCheckpoints, useProjectGraph } from "@/api/hooks";
 import type { GateCheckpoint } from "@/api/types";
 import CheckpointRow from "@/components/molecules/CheckpointRow";
 import EmptyState from "@/components/molecules/EmptyState";
@@ -48,13 +48,17 @@ interface CheckpointListProps {
 }
 
 export default function CheckpointList({ projectId }: CheckpointListProps) {
-  const { data, isLoading, isError, error, refetch } = useCheckpoints(projectId);
-
   // Filter and sort state.
   const [gateTypeFilter, setGateTypeFilter] = useState<GateTypeFilter>("all");
   const [readinessFilter, setReadinessFilter] =
     useState<ReadinessFilter>("all");
+  const [milestoneFilter, setMilestoneFilter] = useState<string>("all");
   const [ageSortOrder, setAgeSortOrder] = useState<AgeSortOrder>("newest");
+  const [showCompleted, setShowCompleted] = useState(false);
+
+  const { data, isLoading, isError, error, refetch } = useCheckpoints(projectId, showCompleted);
+  const { data: graphData } = useProjectGraph(projectId);
+  const milestones = graphData?.milestones ?? [];
 
   // Apply filters and sorting.
   const filteredCheckpoints = useMemo(() => {
@@ -72,6 +76,11 @@ export default function CheckpointList({ projectId }: CheckpointListProps) {
       items = items.filter((cp) => checkpointReadiness(cp) === readinessFilter);
     }
 
+    // Filter by milestone.
+    if (milestoneFilter !== "all") {
+      items = items.filter((cp) => cp.scope.milestone_id === milestoneFilter);
+    }
+
     // Sort by age.
     const sorted = [...items].sort((a, b) => {
       if (ageSortOrder === "newest") {
@@ -81,7 +90,7 @@ export default function CheckpointList({ projectId }: CheckpointListProps) {
     });
 
     return sorted;
-  }, [data?.items, gateTypeFilter, readinessFilter, ageSortOrder]);
+  }, [data?.items, gateTypeFilter, readinessFilter, milestoneFilter, ageSortOrder]);
 
   // ---------------------------------------------------------------------------
   // Loading state.
@@ -92,6 +101,7 @@ export default function CheckpointList({ projectId }: CheckpointListProps) {
       <div role="status" aria-label="Loading checkpoints" className="mt-4 space-y-4">
         <div className="flex flex-wrap items-center gap-3">
           <Skeleton className="h-8 w-24" />
+          <Skeleton className="h-8 w-28" />
           <Skeleton className="h-8 w-28" />
           <Skeleton className="h-8 w-28" />
         </div>
@@ -197,6 +207,32 @@ export default function CheckpointList({ projectId }: CheckpointListProps) {
           </Select>
         </div>
 
+        {/* Milestone filter */}
+        <div className="flex items-center gap-1.5">
+          <label
+            htmlFor="milestone-filter"
+            className="text-sm text-muted-foreground whitespace-nowrap"
+          >
+            Milestone
+          </label>
+          <Select
+            value={milestoneFilter}
+            onValueChange={(v) => setMilestoneFilter(v)}
+          >
+            <SelectTrigger id="milestone-filter" className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              {milestones.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.short_id ?? m.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Age sort order */}
         <div className="flex items-center gap-1.5">
           <label
@@ -218,6 +254,17 @@ export default function CheckpointList({ projectId }: CheckpointListProps) {
             </SelectContent>
           </Select>
         </div>
+
+        {/* Show completed toggle */}
+        <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showCompleted}
+            onChange={(e) => setShowCompleted(e.target.checked)}
+            className="rounded border-input"
+          />
+          Show completed
+        </label>
 
         {/* Result count */}
         <span className="text-xs text-muted-foreground ml-auto">

@@ -882,6 +882,7 @@ class SqlStore:
         gate_type: str | None = None,
         phase_id: str | None = None,
         milestone_id: str | None = None,
+        include_completed: bool = False,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[dict[str, Any]], int]:
@@ -889,8 +890,9 @@ class SqlStore:
             query = select(TaskModel).where(
                 TaskModel.project_id == project_id,
                 TaskModel.task_class.in_([TaskClass.REVIEW_GATE, TaskClass.MERGE_GATE]),
-                TaskModel.state.in_(list(ACTIVE_GATE_STATES)),
             )
+            if not include_completed:
+                query = query.where(TaskModel.state.in_(list(ACTIVE_GATE_STATES)))
 
             if gate_type is not None:
                 query = query.where(TaskModel.task_class == TaskClass(gate_type))

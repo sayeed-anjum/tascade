@@ -204,6 +204,7 @@ def list_gate_checkpoints(
     gate_type: str | None = None,
     phase_id: str | None = None,
     milestone_id: str | None = None,
+    include_completed: bool = False,
     limit: int = 50,
     offset: int = 0,
     auth: AuthContext = Depends(get_auth_context),
@@ -228,6 +229,7 @@ def list_gate_checkpoints(
         gate_type=gate_type,
         phase_id=phase_id,
         milestone_id=milestone_id,
+        include_completed=include_completed,
         limit=limit,
         offset=offset,
     )
