@@ -112,6 +112,7 @@ def breakdown_data(project_id: str):
         ("P5.M1", 8.0, {"count": 8, "percentage": 33.3}),
         ("P5.M2", 16.0, {"count": 16, "percentage": 66.7}),
     ]
+    now = datetime.now(timezone.utc)
     with SessionLocal.begin() as session:
         for dim_val, value, extra in items:
             row = MetricsBreakdownPointModel(
@@ -121,6 +122,7 @@ def breakdown_data(project_id: str):
                 dimension_value=dim_val,
                 value_numeric=value,
                 value_json=extra,
+                time_bucket=now,
             )
             session.add(row)
         session.flush()
@@ -368,3 +370,81 @@ class TestMetricsDrilldown:
         assert resp.status_code == 200
         body = resp.json()
         assert body["pagination"]["limit"] == 500
+
+    def test_drilldown_invalid_filters_json(self, client: TestClient, project_id: str):
+        """Invalid filters JSON string returns 400."""
+        resp = client.get("/v1/metrics/drilldown", params={
+            "project_id": project_id,
+            "metric": "cycle_time",
+            "filters": "not-valid-json{",
+        })
+        assert resp.status_code == 400
+        body = resp.json()
+        assert body["error"]["code"] == "BAD_REQUEST"
+
+    def test_drilldown_invalid_granularity_value(self, client: TestClient, project_id: str):
+        """Invalid granularity value on trends returns 422 (Literal validation)."""
+        resp = client.get("/v1/metrics/trends", params={
+            "project_id": project_id,
+            "metric": "cycle_time",
+            "start_date": "2026-02-01",
+            "end_date": "2026-02-04",
+            "granularity": "invalid_grain",
+        })
+        assert resp.status_code == 422
+
+    def test_drilldown_sort_by_value_desc(self, client: TestClient, drilldown_data: dict):
+        """Default sort_by=value, sort_order=desc returns items in descending value order."""
+        resp = client.get("/v1/metrics/drilldown", params={
+            "project_id": drilldown_data["project_id"],
+            "metric": "cycle_time",
+            "sort_by": "value",
+            "sort_order": "desc",
+        })
+        assert resp.status_code == 200
+        body = resp.json()
+        values = [item["value"] for item in body["items"]]
+        assert values == sorted(values, reverse=True)
+
+    def test_drilldown_sort_by_value_asc(self, client: TestClient, drilldown_data: dict):
+        """sort_by=value, sort_order=asc returns items in ascending value order."""
+        resp = client.get("/v1/metrics/drilldown", params={
+            "project_id": drilldown_data["project_id"],
+            "metric": "cycle_time",
+            "sort_by": "value",
+            "sort_order": "asc",
+        })
+        assert resp.status_code == 200
+        body = resp.json()
+        values = [item["value"] for item in body["items"]]
+        assert values == sorted(values)
+
+    def test_drilldown_sort_by_timestamp(self, client: TestClient, drilldown_data: dict):
+        """sort_by=timestamp returns items ordered by timestamp."""
+        resp = client.get("/v1/metrics/drilldown", params={
+            "project_id": drilldown_data["project_id"],
+            "metric": "cycle_time",
+            "sort_by": "timestamp",
+            "sort_order": "asc",
+        })
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["items"]) == 5
+
+    def test_drilldown_invalid_sort_by(self, client: TestClient, project_id: str):
+        """Invalid sort_by value returns 422 (Literal validation)."""
+        resp = client.get("/v1/metrics/drilldown", params={
+            "project_id": project_id,
+            "metric": "cycle_time",
+            "sort_by": "invalid_field",
+        })
+        assert resp.status_code == 422
+
+    def test_drilldown_invalid_sort_order(self, client: TestClient, project_id: str):
+        """Invalid sort_order value returns 422 (Literal validation)."""
+        resp = client.get("/v1/metrics/drilldown", params={
+            "project_id": project_id,
+            "metric": "cycle_time",
+            "sort_order": "sideways",
+        })
+        assert resp.status_code == 422
