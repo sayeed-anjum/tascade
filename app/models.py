@@ -120,6 +120,16 @@ class MetricsTimeGrain(str, Enum):
     MONTH = "month"
 
 
+class MetricsJobMode(str, Enum):
+    BATCH = "batch"
+    NEAR_REAL_TIME = "near_real_time"
+
+
+class MetricsJobStatus(str, Enum):
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
 UUID_TEXT = Uuid(as_uuid=False)
 TEXT_LIST = JSON().with_variant(ARRAY(Text), "postgresql")
 JSON_LIST = JSON().with_variant(JSONB, "postgresql")
@@ -608,3 +618,85 @@ class EventLogModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=_utcnow
     )
+
+
+class MetricsJobCheckpointModel(Base):
+    __tablename__ = "metrics_job_checkpoint"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id", "mode", name="uq_metrics_checkpoint_project_mode"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    mode: Mapped[MetricsJobMode] = mapped_column(
+        SAEnum(MetricsJobMode, values_callable=_enum_values), nullable=False
+    )
+    last_event_id: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
+
+
+class MetricsStateTransitionCounterModel(Base):
+    __tablename__ = "metrics_state_transition_counter"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id",
+            "task_state",
+            name="uq_metrics_state_transition_counter_project_state",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    task_state: Mapped[TaskState] = mapped_column(
+        SAEnum(TaskState, values_callable=_enum_values), nullable=False
+    )
+    transition_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_event_id: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
+
+
+class MetricsJobRunModel(Base):
+    __tablename__ = "metrics_job_run"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id", "idempotency_key", name="uq_metrics_job_run_idempotency"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(UUID_TEXT, primary_key=True, default=_new_id)
+    project_id: Mapped[str] = mapped_column(
+        UUID_TEXT, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
+    )
+    mode: Mapped[MetricsJobMode] = mapped_column(
+        SAEnum(MetricsJobMode, values_callable=_enum_values), nullable=False
+    )
+    status: Mapped[MetricsJobStatus] = mapped_column(
+        SAEnum(MetricsJobStatus, values_callable=_enum_values), nullable=False
+    )
+    idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
+    replay_from_event_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    start_event_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_event_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    processed_events: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

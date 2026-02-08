@@ -210,6 +210,38 @@ REQUIRED_SCHEMA: dict[str, set[str]] = {
         "payload",
         "computed_at",
     },
+    "metrics_job_checkpoint": {
+        "id",
+        "project_id",
+        "mode",
+        "last_event_id",
+        "last_success_at",
+        "created_at",
+        "updated_at",
+    },
+    "metrics_state_transition_counter": {
+        "id",
+        "project_id",
+        "task_state",
+        "transition_count",
+        "last_event_id",
+        "created_at",
+        "updated_at",
+    },
+    "metrics_job_run": {
+        "id",
+        "project_id",
+        "mode",
+        "status",
+        "idempotency_key",
+        "replay_from_event_id",
+        "start_event_id",
+        "end_event_id",
+        "processed_events",
+        "failure_reason",
+        "created_at",
+        "completed_at",
+    },
 }
 
 
