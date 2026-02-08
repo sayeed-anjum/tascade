@@ -24,6 +24,10 @@ def test_ratio_or_none_zero_over_zero_returns_zero() -> None:
     assert primitives.ratio_or_none(0, 0) == 0.0
 
 
+def test_ratio_or_none_nonzero_over_zero_returns_none() -> None:
+    assert primitives.ratio_or_none(3, 0) is None
+
+
 def test_cycle_time_stability_handles_zero_mean() -> None:
     stability = calculators.cycle_time_stability([0, 0, 0])
 
@@ -153,10 +157,12 @@ def test_wip_age_seconds_from_entered_in_progress() -> None:
 
 def test_blocked_ratio_and_age_summary() -> None:
     ratio = calculators.blocked_ratio(blocked_count=2, total_wip_count=10)
-    summary = calculators.blocked_age_summary([3600, 7200, 10800])
+    ages = [3600, 7200, 10800]
+    summary = calculators.blocked_age_summary(ages)
 
     assert ratio == pytest.approx(0.2)
     assert summary["avg"] == pytest.approx(7200)
+    assert summary["p90"] == pytest.approx(primitives.percentile_cont(ages, 0.9))
     assert summary["max"] == 10800
 
 
@@ -166,6 +172,15 @@ def test_ini_conflict_probability_and_risk_score() -> None:
 
     assert probability == pytest.approx(1 - (1 - 0.05) ** 3)
     assert risk == pytest.approx(probability * 0.8)
+
+
+def test_ini_age_seconds_from_implemented_at() -> None:
+    now = datetime(2026, 2, 8, 12, 0, tzinfo=timezone.utc)
+    implemented_at = now - timedelta(days=1, hours=2)
+
+    age_seconds = calculators.ini_age_seconds(implemented_at, now=now)
+
+    assert age_seconds == pytest.approx((1 * 86400) + (2 * 3600))
 
 
 def test_ini_count_and_age_distribution() -> None:
@@ -202,6 +217,11 @@ def test_integration_outcome_mix_counts() -> None:
     assert mix["failed_conflict"] == 1
     assert mix["failed_checks"] == 1
     assert mix["failed_abort"] == 1
+    assert mix["ratios"]["ratio_success_first"] == pytest.approx(1 / 5)
+    assert mix["ratios"]["ratio_success_retry"] == pytest.approx(1 / 5)
+    assert mix["ratios"]["ratio_failed_conflict"] == pytest.approx(1 / 5)
+    assert mix["ratios"]["ratio_failed_checks"] == pytest.approx(1 / 5)
+    assert mix["ratios"]["ratio_failed_abort"] == pytest.approx(1 / 5)
 
 
 def test_state_distribution_wip_count() -> None:
