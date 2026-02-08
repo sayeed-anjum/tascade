@@ -64,7 +64,7 @@ describe("TaskDetailPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Loading task...")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Loading task" })).toBeInTheDocument();
   });
 
   it("renders task header with short_id, state badge, and title", async () => {

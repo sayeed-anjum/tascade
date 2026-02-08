@@ -29,7 +29,7 @@ describe("KanbanBoard", () => {
     );
 
     renderWithProviders(<KanbanBoard projectId="proj-1" />);
-    expect(screen.getByText("Loading project tasks...")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Loading tasks" })).toBeInTheDocument();
   });
 
   it("shows error state on API failure", async () => {
@@ -42,6 +42,7 @@ describe("KanbanBoard", () => {
     renderWithProviders(<KanbanBoard projectId="proj-1" />);
 
     await waitFor(() => {
+      expect(screen.getByRole("alert")).toBeInTheDocument();
       expect(screen.getByText(/Failed to load tasks/)).toBeInTheDocument();
     });
   });

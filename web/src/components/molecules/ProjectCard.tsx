@@ -45,7 +45,7 @@ interface ProjectCardProps {
 }
 
 export default function ProjectCard({ project }: ProjectCardProps) {
-  const { data: graphData, isLoading: graphLoading } = useProjectGraph(
+  const { data: graphData, isLoading: graphLoading, isError: graphError } = useProjectGraph(
     project.id,
   );
 
@@ -92,6 +92,8 @@ export default function ProjectCard({ project }: ProjectCardProps) {
         <CardContent>
           {graphLoading ? (
             <p className="text-xs text-muted-foreground">Loading tasks...</p>
+          ) : graphError ? (
+            <p className="text-xs text-destructive">Failed to load tasks</p>
           ) : totalTasks === 0 ? (
             <p className="text-xs text-muted-foreground">No tasks yet</p>
           ) : (

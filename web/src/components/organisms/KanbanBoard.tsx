@@ -9,6 +9,8 @@ import { useNavigate } from "react-router-dom";
 
 import { useProjectGraph } from "@/api/hooks";
 import type { GraphTask } from "@/api/types";
+import EmptyState from "@/components/molecules/EmptyState";
+import ErrorMessage from "@/components/molecules/ErrorMessage";
 import FilterBar, {
   EMPTY_FILTERS,
   type FilterState,
@@ -16,6 +18,7 @@ import FilterBar, {
 import TaskCard from "@/components/molecules/TaskCard";
 import StateBadge from "@/components/molecules/StateBadge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // ---------------------------------------------------------------------------
 // Column definitions
@@ -117,7 +120,7 @@ interface KanbanBoardProps {
 
 export default function KanbanBoard({ projectId }: KanbanBoardProps) {
   const navigate = useNavigate();
-  const { data, isLoading, isError, error } = useProjectGraph(projectId);
+  const { data, isLoading, isError, error, refetch } = useProjectGraph(projectId);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [collapsed, setCollapsed] = useState<Set<string>>(
     () => new Set(DEFAULT_COLLAPSED),
@@ -151,18 +154,42 @@ export default function KanbanBoard({ projectId }: KanbanBoardProps) {
   // Loading / error states.
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12 text-muted-foreground">
-        Loading project tasks...
+      <div role="status" aria-label="Loading tasks" className="flex gap-4 overflow-x-auto pb-4">
+        {COLUMN_ORDER.slice(0, 4).map((state) => (
+          <div
+            key={state}
+            className="flex w-[280px] shrink-0 flex-col rounded-lg border bg-muted/40"
+          >
+            <div className="flex items-center gap-2 px-3 py-2">
+              <Skeleton className="h-5 w-20 rounded-full" />
+              <Skeleton className="h-4 w-4 rounded" />
+            </div>
+            <div className="flex flex-col gap-2 px-2 pb-2">
+              {Array.from({ length: state === "ready" ? 3 : 2 }, (_, i) => (
+                <Skeleton key={i} className="h-20 w-full rounded-md" />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex items-center justify-center py-12 text-destructive">
-        Failed to load tasks:{" "}
-        {error instanceof Error ? error.message : "Unknown error"}
-      </div>
+      <ErrorMessage
+        message={`Failed to load tasks: ${error instanceof Error ? error.message : "Unknown error"}`}
+        onRetry={() => refetch()}
+      />
+    );
+  }
+
+  if (tasks.length === 0) {
+    return (
+      <EmptyState
+        title="No tasks yet"
+        description="Create tasks via the API to see them on the board."
+      />
     );
   }
 

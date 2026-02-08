@@ -8,8 +8,10 @@ import {
 } from "@/api/hooks";
 import type { Artifact, DependencyEdge, GateDecision, GraphTask } from "@/api/types";
 import DependencyLink from "@/components/molecules/DependencyLink";
+import ErrorMessage from "@/components/molecules/ErrorMessage";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Sheet,
   SheetContent,
@@ -363,7 +365,7 @@ export default function TaskDetailPanel({
   open,
   onClose,
 }: TaskDetailPanelProps) {
-  const { data: task, isLoading: taskLoading } = useTask(taskId ?? undefined);
+  const { data: task, isLoading: taskLoading, isError: taskError, error: taskErr, refetch: refetchTask } = useTask(taskId ?? undefined);
   const { data: artifactsData } = useTaskArtifacts(taskId ?? undefined);
   const { data: gateData } = useGateDecisions(projectId);
   const { data: graphData } = useProjectGraph(projectId);
@@ -411,11 +413,34 @@ export default function TaskDetailPanel({
         side="right"
         className="w-full sm:max-w-[480px] p-0 flex flex-col"
       >
-        {taskLoading || !task ? (
+        {taskLoading ? (
+          <div role="status" aria-label="Loading task" className="flex flex-col gap-4 p-4">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-5 w-20" />
+              <Skeleton className="h-5 w-24 rounded-full" />
+              <Skeleton className="h-5 w-10 rounded-full" />
+            </div>
+            <Skeleton className="h-6 w-3/4" />
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-5 w-16 rounded-full" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+            </div>
+            <Skeleton className="h-px w-full" />
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+          </div>
+        ) : taskError ? (
+          <div className="flex items-center justify-center h-full p-6">
+            <ErrorMessage
+              message={`Failed to load task: ${taskErr instanceof Error ? taskErr.message : "Unknown error"}`}
+              onRetry={() => refetchTask()}
+            />
+          </div>
+        ) : !task ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-muted-foreground">
-              {taskLoading ? "Loading task..." : "Task not found."}
-            </p>
+            <p className="text-sm text-muted-foreground">Task not found.</p>
           </div>
         ) : (
           <>
