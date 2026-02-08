@@ -197,7 +197,7 @@ def wip_age_bucket(age_seconds: float) -> str:
         return "fresh"
     if age_seconds < 7 * SECONDS_PER_DAY:
         return "aging"
-    if age_seconds < 14 * SECONDS_PER_DAY:
+    if age_seconds <= 14 * SECONDS_PER_DAY:
         return "stale"
     return "at_risk"
 
@@ -325,7 +325,7 @@ def bottleneck_contribution(stage_times_seconds: dict[str, float]) -> dict[str, 
         for stage, duration in stage_times_seconds.items()
     }
     primary_stage, primary_value = max(contributions.items(), key=lambda item: item[1])
-    primary = primary_stage if primary_value >= 0.40 else None
+    primary = primary_stage if primary_value > 0.40 else None
     return {"contributions": contributions, "primary": primary}
 
 
@@ -352,7 +352,7 @@ def dependency_risk(
         }
 
     float_consumption = effective_delay / available_float_days
-    if float_consumption >= 0.8:
+    if float_consumption > 0.8:
         level = "high"
     elif float_consumption > 0.5:
         level = "medium"

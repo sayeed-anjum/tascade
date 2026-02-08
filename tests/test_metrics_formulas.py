@@ -136,13 +136,14 @@ def test_wip_age_bucketization() -> None:
             2 * 86400,
             4 * 86400,
             10 * 86400,
+            14 * 86400,
             20 * 86400,
         ]
     )
 
     assert buckets["fresh"] == 1
     assert buckets["aging"] == 1
-    assert buckets["stale"] == 1
+    assert buckets["stale"] == 2
     assert buckets["at_risk"] == 1
 
 
@@ -241,13 +242,22 @@ def test_state_distribution_wip_count() -> None:
     assert distribution["wip_count"] == 11
 
 
-def test_bottleneck_contribution_and_primary() -> None:
+def test_bottleneck_contribution_primary_boundary() -> None:
     contributions = calculators.bottleneck_contribution(
         {"queue": 4, "development": 6, "review": 12, "integration": 8}
     )
 
-    assert contributions["primary"] == "review"
+    assert contributions["primary"] is None
     assert contributions["contributions"]["review"] == pytest.approx(12 / 30)
+
+
+def test_bottleneck_contribution_primary_above_threshold() -> None:
+    contributions = calculators.bottleneck_contribution(
+        {"queue": 4, "development": 6, "review": 13, "integration": 7}
+    )
+
+    assert contributions["primary"] == "review"
+    assert contributions["contributions"]["review"] == pytest.approx(13 / 30)
 
 
 def test_review_reassignment_trigger_and_score() -> None:
@@ -261,7 +271,10 @@ def test_review_reassignment_trigger_and_score() -> None:
 
 def test_dependency_risk_levels() -> None:
     risk_high = calculators.dependency_risk(
-        delay_days=8, downstream_impact=5, available_float_days=10
+        delay_days=9, downstream_impact=5, available_float_days=10
+    )
+    risk_boundary = calculators.dependency_risk(
+        delay_days=8, downstream_impact=3, available_float_days=10
     )
     risk_medium = calculators.dependency_risk(
         delay_days=6, downstream_impact=1, available_float_days=10
@@ -271,5 +284,6 @@ def test_dependency_risk_levels() -> None:
     )
 
     assert risk_high["level"] == "high"
+    assert risk_boundary["level"] == "medium"
     assert risk_medium["level"] == "medium"
     assert risk_low["level"] == "low"
