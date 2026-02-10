@@ -38,6 +38,7 @@ MCP_TOOL_NAMES = [
     "apply_plan_changeset",
     "get_task_context",
     "get_project_graph",
+    "get_instructions",
 ]
 
 
@@ -73,6 +74,17 @@ _DOMAIN_ERRORS: dict[str, tuple[str, bool]] = {
     "GATE_DECISION_REQUIRED": ("Gate decision is required before integration", False),
     "POLICY_CONFIG_INVALID": ("Gate policy configuration is invalid", False),
     "INVALID_CAPABILITIES": ("Capabilities must be a string or list of strings", False),
+    "INVALID_TASK_CLASS": (
+        "Invalid task_class. Valid: architecture, db_schema, security, "
+        "cross_cutting, review_gate, merge_gate, frontend, backend, crud, other",
+        False,
+    ),
+    "INVALID_WORK_SPEC": (
+        "work_spec must include 'objective' (string). Optional: "
+        "'acceptance_criteria' (list[str]), 'constraints' (list[str]), "
+        "'interfaces' (list[str]), 'path_hints' (list[str])",
+        False,
+    ),
 }
 
 
@@ -152,6 +164,7 @@ def create_mcp_server():
     server.tool(name="apply_plan_changeset")(_wrap_tool(mcp_tools.apply_plan_changeset))
     server.tool(name="get_task_context")(_wrap_tool(mcp_tools.get_task_context))
     server.tool(name="get_project_graph")(_wrap_tool(mcp_tools.get_project_graph))
+    server.tool(name="get_instructions")(_wrap_tool(mcp_tools.get_instructions))
 
     return server
 

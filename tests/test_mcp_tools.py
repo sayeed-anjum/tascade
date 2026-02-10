@@ -933,3 +933,57 @@ def test_mcp_create_milestone_rejects_duplicate_sequence():
         raise AssertionError("Expected ValueError")
     except ValueError as exc:
         assert str(exc) == "SEQUENCE_CONFLICT"
+
+
+def test_mcp_create_task_rejects_invalid_task_class():
+    project = mcp_tools.create_project(name="invalid-class-proj")
+    phase = mcp_tools.create_phase(project_id=project["id"], name="Phase A", sequence=0)
+    milestone = mcp_tools.create_milestone(
+        project_id=project["id"],
+        name="Milestone A",
+        sequence=0,
+        phase_id=phase["id"],
+    )
+    try:
+        mcp_tools.create_task(
+            project_id=project["id"],
+            milestone_id=milestone["id"],
+            title="Bad class task",
+            task_class="code",
+            work_spec=_work_spec("Bad class"),
+        )
+        raise AssertionError("Expected ValueError")
+    except ValueError as exc:
+        assert str(exc) == "INVALID_TASK_CLASS"
+
+
+def test_mcp_create_task_rejects_missing_work_spec_objective():
+    project = mcp_tools.create_project(name="invalid-workspec-proj")
+    phase = mcp_tools.create_phase(project_id=project["id"], name="Phase A", sequence=0)
+    milestone = mcp_tools.create_milestone(
+        project_id=project["id"],
+        name="Milestone A",
+        sequence=0,
+        phase_id=phase["id"],
+    )
+    try:
+        mcp_tools.create_task(
+            project_id=project["id"],
+            milestone_id=milestone["id"],
+            title="Bad workspec task",
+            task_class="backend",
+            work_spec={"acceptance_criteria": ["something"]},
+        )
+        raise AssertionError("Expected ValueError")
+    except ValueError as exc:
+        assert str(exc) == "INVALID_WORK_SPEC"
+
+
+def test_mcp_get_instructions_returns_protocol_guide():
+    result = mcp_tools.get_instructions()
+    assert isinstance(result, str)
+    assert "Project Setup" in result
+    assert "task_class" in result
+    assert "work_spec" in result
+    assert "reviewed_by" in result
+    assert "create_task_artifact" in result
