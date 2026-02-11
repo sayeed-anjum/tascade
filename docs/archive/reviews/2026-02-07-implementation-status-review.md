@@ -6,9 +6,9 @@
 ## Purpose
 
 Sync implementation reality against:
-- `/Users/sayeedanjum/projects/tascade/docs/prd/2026-02-06-agentic-task-orchestration-prd-v0.1.md`
-- `/Users/sayeedanjum/projects/tascade/docs/srs/2026-02-06-agentic-task-orchestration-srs-v0.1.md`
-- `/Users/sayeedanjum/projects/tascade/docs/plans/2026-02-07-v1-completion-program-plan.md`
+- `docs/prd/2026-02-06-agentic-task-orchestration-prd-v0.1.md`
+- `docs/srs/2026-02-06-agentic-task-orchestration-srs-v0.1.md`
+- `docs/plans/2026-02-07-v1-completion-program-plan.md`
 
 ## Current Project Snapshot
 

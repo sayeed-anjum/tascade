@@ -31,7 +31,7 @@ export TASCADE_DATABASE_URL='sqlite+pysqlite:///tascade.db'
 ```
 
 Migrations:
-- Postgres startup applies SQL files from `/Users/sayeedanjum/projects/tascade/docs/db/migrations/`.
+- Postgres startup applies SQL files from `docs/db/migrations/`.
 - SQLite uses SQLAlchemy schema creation for local workflows.
 
 ## Run Backend
@@ -69,7 +69,7 @@ Start with self-locating script:
 ./mcp-server.sh
 ```
 
-MCP details: `/Users/sayeedanjum/projects/tascade/docs/api/README.md`
+MCP details: `docs/api/README.md`
 
 ## Task Lifecycle (Canonical)
 

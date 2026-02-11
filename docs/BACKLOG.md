@@ -8,9 +8,9 @@ This backlog captures outstanding work identified by reconciling current code ag
 - Gap: MCP exposes task context but REST does not.
 - Requirement lineage: archived SRS API requirements (`GET /v1/tasks/{id}/context`).
 - Current evidence:
-  - context logic exists in `/Users/sayeedanjum/projects/tascade/app/store.py`
-  - MCP tool exists in `/Users/sayeedanjum/projects/tascade/app/mcp_tools.py`
-  - missing route in `/Users/sayeedanjum/projects/tascade/app/main.py`
+  - context logic exists in `app/store.py`
+  - MCP tool exists in `app/mcp_tools.py`
+  - missing route in `app/main.py`
 - Acceptance criteria:
   - Add `GET /v1/tasks/{task_id}/context` REST endpoint with auth and project-scope enforcement.
   - Support `ancestor_depth` and `dependent_depth` query parameters.
@@ -21,7 +21,7 @@ This backlog captures outstanding work identified by reconciling current code ag
 - Requirement lineage: archived SRS API requirements (`GET /v1/tasks/{id}/execution-snapshots`).
 - Current evidence:
   - snapshot capture exists in claim flow.
-  - no retrieval route in `/Users/sayeedanjum/projects/tascade/app/main.py`.
+  - no retrieval route in `app/main.py`.
 - Acceptance criteria:
   - Add `GET /v1/tasks/{task_id}/execution-snapshots`.
   - Return snapshots in deterministic order with project-scope auth checks.
@@ -30,8 +30,8 @@ This backlog captures outstanding work identified by reconciling current code ag
 3. Decide and implement canonical context default depths
 - Gap: archived SRS calls for default `ancestor_depth=2`, `dependent_depth=1`; current defaults are effectively `1/1`.
 - Current evidence:
-  - `/Users/sayeedanjum/projects/tascade/app/store.py`
-  - `/Users/sayeedanjum/projects/tascade/app/mcp_tools.py`
+  - `app/store.py`
+  - `app/mcp_tools.py`
 - Acceptance criteria:
   - Choose canonical defaults (`2/1` or updated spec), apply consistently across REST + MCP + docs.
   - Add regression tests for omitted-parameter defaults.

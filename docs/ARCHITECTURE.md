@@ -65,8 +65,8 @@ Notes:
 
 ## Data and Migrations
 
-- SQLAlchemy models in `/Users/sayeedanjum/projects/tascade/app/models.py`.
-- Postgres migrations in `/Users/sayeedanjum/projects/tascade/docs/db/migrations/`.
+- SQLAlchemy models in `app/models.py`.
+- Postgres migrations in `docs/db/migrations/`.
 - Startup applies missing migrations and tracks them in `schema_migrations`.
 
 ## Frontend Surface

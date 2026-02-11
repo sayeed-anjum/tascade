@@ -6,4 +6,4 @@ Guidelines:
 
 - Treat archived documents as provenance/history.
 - Do not treat archived status statements as current implementation truth.
-- Use current docs in `/Users/sayeedanjum/projects/tascade/docs/` and live code/tests for active decisions.
+- Use current docs in `docs/` and live code/tests for active decisions.

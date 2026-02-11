@@ -2,7 +2,7 @@
 
 ## OpenAPI
 
-- Spec file: `/Users/sayeedanjum/projects/tascade/docs/api/openapi-v0.1.yaml`
+- Spec file: `docs/api/openapi-v0.1.yaml`
 - Source of truth: generated from live FastAPI app.
 
 Regenerate:
@@ -78,4 +78,4 @@ Registered tools:
 - `list[str]` (preferred)
 - comma-delimited `string`
 
-See `/Users/sayeedanjum/projects/tascade/docs/api/mcp-list-ready-tasks.md`.
+See `docs/api/mcp-list-ready-tasks.md`.

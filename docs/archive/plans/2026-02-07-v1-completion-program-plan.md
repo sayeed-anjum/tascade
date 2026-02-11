@@ -69,5 +69,5 @@ These are candidate follow-ons, not yet active tasks:
 
 ## Notes
 
-- Existing proposal backlog remains in `/Users/sayeedanjum/projects/tascade/docs/proposals/2026-02-07-orchestration-improvements-proposals.md`.
+- Existing proposal backlog remains in `docs/proposals/2026-02-07-orchestration-improvements-proposals.md`.
 - This plan now reflects current short-ID-first operating conventions.
