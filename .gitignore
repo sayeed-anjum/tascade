@@ -1,7 +1,49 @@
+# Python
 __pycache__/
 *.py[cod]
+*.pyo
 .pytest_cache/
 .venv/
-
-.worktrees/
+*.egg-info/
+dist/
+build/
 .coverage
+htmlcov/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Node / web
+node_modules/
+web/dist/
+web/.vite/
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Certificates / keys
+*.pem
+*.key
+*.crt
+!requirements*.txt
+
+# Serena IDE config
+.serena/
+
+# Tascade worktrees
+.worktrees/

@@ -1,12 +1,12 @@
 # Tascade Backlog (Current)
 
-This backlog captures outstanding work identified by reconciling current code against archived PRD/SRS requirements.
+This backlog captures outstanding work identified by reconciling current code against PRD/SRS requirements.
 
 ## Must-Have
 
 1. Add REST task context endpoint
 - Gap: MCP exposes task context but REST does not.
-- Requirement lineage: archived SRS API requirements (`GET /v1/tasks/{id}/context`).
+- Requirement lineage: SRS API requirements (`GET /v1/tasks/{id}/context`).
 - Current evidence:
   - context logic exists in `app/store.py`
   - MCP tool exists in `app/mcp_tools.py`
@@ -18,7 +18,7 @@ This backlog captures outstanding work identified by reconciling current code ag
 
 2. Add execution snapshot retrieval endpoint
 - Gap: snapshots are captured on claim but no REST retrieval endpoint exists.
-- Requirement lineage: archived SRS API requirements (`GET /v1/tasks/{id}/execution-snapshots`).
+- Requirement lineage: SRS API requirements (`GET /v1/tasks/{id}/execution-snapshots`).
 - Current evidence:
   - snapshot capture exists in claim flow.
   - no retrieval route in `app/main.py`.
@@ -28,7 +28,7 @@ This backlog captures outstanding work identified by reconciling current code ag
   - Add endpoint tests.
 
 3. Decide and implement canonical context default depths
-- Gap: archived SRS calls for default `ancestor_depth=2`, `dependent_depth=1`; current defaults are effectively `1/1`.
+- Gap: SRS calls for default `ancestor_depth=2`, `dependent_depth=1`; current defaults are effectively `1/1`.
 - Current evidence:
   - `app/store.py`
   - `app/mcp_tools.py`
@@ -37,8 +37,8 @@ This backlog captures outstanding work identified by reconciling current code ag
   - Add regression tests for omitted-parameter defaults.
 
 4. Add task changelog model and endpoints (or formally de-scope)
-- Gap: append-only changelog is specified in archived docs but not implemented.
-- Requirement lineage: archived PRD `FR-27`, archived SRS changelog endpoints.
+- Gap: append-only changelog is specified in design docs but not implemented.
+- Requirement lineage: PRD `FR-27`, SRS changelog endpoints.
 - Acceptance criteria (if implemented):
   - Introduce append-only changelog persistence model.
   - Add `POST /v1/tasks/{task_id}/changelog` and `GET /v1/tasks/{task_id}/changelog`.
@@ -51,13 +51,13 @@ This backlog captures outstanding work identified by reconciling current code ag
 ## Optional / Legacy Compatibility
 
 1. Add `unassign` endpoint
-- Gap: archived SRS listed `POST /v1/tasks/{id}/unassign`.
+- Gap: SRS listed `POST /v1/tasks/{id}/unassign`.
 - Current behavior: reservations can expire or be consumed; no direct unassign API.
 - Acceptance criteria:
   - Either add explicit unassign operation + tests, or de-scope in current docs.
 
 2. Add plan helper endpoints (`validate`, `current`)
-- Gap: archived SRS listed:
+- Gap: SRS listed:
   - `POST /v1/plans/changesets/{id}/validate`
   - `GET /v1/plans/current`
 - Current behavior: create/apply exists; validate/current are absent.
@@ -65,7 +65,7 @@ This backlog captures outstanding work identified by reconciling current code ag
   - Implement these endpoints or document that preview is embedded in create/apply flow.
 
 3. Add/decline legacy alias endpoints
-- Gap: archived SRS used alias forms:
+- Gap: SRS used alias forms:
   - `/v1/integration/enqueue`
   - `/v1/gates/{id}/decision`
   - `/v1/views/graph`
@@ -76,7 +76,7 @@ This backlog captures outstanding work identified by reconciling current code ag
   - If not, document canonical replacements in API docs.
 
 4. Idempotency and outbox hardening at platform level
-- Gap: archived SRS expects general mutating-request idempotency + outbox replay semantics.
+- Gap: SRS expects general mutating-request idempotency + outbox replay semantics.
 - Current evidence:
   - no platform-wide idempotency-key handling.
   - no generic outbox publisher/replay subsystem.
