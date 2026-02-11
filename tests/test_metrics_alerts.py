@@ -256,12 +256,12 @@ class TestStoreAlerts:
             value=0.25,
             threshold=0.30,
         )
-        result = STORE.acknowledge_alert(alert["id"])
+        result = STORE.acknowledge_alert(alert["id"], pid)
         assert result["acknowledged_at"] is not None
 
     def test_acknowledge_not_found(self):
         with pytest.raises(KeyError, match="ALERT_NOT_FOUND"):
-            STORE.acknowledge_alert("nonexistent-id")
+            STORE.acknowledge_alert("nonexistent-id", "any-project")
 
     def test_filter_severity(self):
         pid = self._make_project()
@@ -281,7 +281,7 @@ class TestStoreAlerts:
         STORE.create_alert(pid, "FES", "threshold", "critical", 0.15, 0.20)
 
         # Acknowledge the first one
-        STORE.acknowledge_alert(a1["id"])
+        STORE.acknowledge_alert(a1["id"], pid)
 
         unacked = STORE.list_alerts(pid, acknowledged=False)
         assert len(unacked) == 1
@@ -334,7 +334,10 @@ class TestAlertEndpoints:
         pid = self._make_project()
         alert = STORE.create_alert(pid, "IRS", "threshold", "warning", 0.70, 0.75)
 
-        resp = client.post(f"/v1/metrics/alerts/{alert['id']}/acknowledge")
+        resp = client.post(
+            f"/v1/metrics/alerts/{alert['id']}/acknowledge",
+            params={"project_id": pid},
+        )
         assert resp.status_code == 200
         assert resp.headers["X-API-Version"] == "1.0"
         body = resp.json()
@@ -342,7 +345,10 @@ class TestAlertEndpoints:
         assert body["acknowledged_at"] is not None
 
     def test_acknowledge_not_found(self):
-        resp = client.post("/v1/metrics/alerts/nonexistent-id/acknowledge")
+        resp = client.post(
+            "/v1/metrics/alerts/nonexistent-id/acknowledge",
+            params={"project_id": "nonexistent"},
+        )
         assert resp.status_code == 404
 
     def test_filter_by_severity_endpoint(self):
@@ -360,7 +366,7 @@ class TestAlertEndpoints:
         pid = self._make_project()
         a1 = STORE.create_alert(pid, "DPI", "threshold", "warning", 0.60, 0.65)
         STORE.create_alert(pid, "FES", "threshold", "critical", 0.15, 0.20)
-        STORE.acknowledge_alert(a1["id"])
+        STORE.acknowledge_alert(a1["id"], pid)
 
         resp = client.get("/v1/metrics/alerts", params={"project_id": pid, "acknowledged": "false"})
         assert resp.status_code == 200

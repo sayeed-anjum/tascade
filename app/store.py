@@ -2133,11 +2133,13 @@ class SqlStore:
             rows = session.execute(query).scalars().all()
             return [_alert_to_dict(row) for row in rows]
 
-    def acknowledge_alert(self, alert_id: str) -> dict[str, Any]:
+    def acknowledge_alert(self, alert_id: str, project_id: str) -> dict[str, Any]:
         with SessionLocal.begin() as session:
             alert = session.get(MetricsAlertModel, alert_id)
             if alert is None:
                 raise KeyError("ALERT_NOT_FOUND")
+            if alert.project_id != project_id:
+                raise ValueError("PROJECT_SCOPE_VIOLATION")
             alert.acknowledged_at = _now()
             session.flush()
             return _alert_to_dict(alert)

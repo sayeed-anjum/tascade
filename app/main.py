@@ -8,8 +8,6 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, s
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.auth.permissions import require_permission
-
 from app.schemas import (
     AcknowledgeAlertResponse,
     ApplyPlanChangesetRequest,
@@ -988,8 +986,9 @@ def get_metrics_summary(
     response: Response,
     project_id: str = Query(...),
     timestamp: str | None = Query(None),
-    _perm: None = Depends(require_permission("summary")),
+    auth: AuthContext = Depends(get_auth_context),
 ) -> MetricsSummaryResponse:
+    require_role("get_metrics_summary", auth, target_project_id=project_id)
     if not STORE.project_exists(project_id):
         raise HTTPException(
             status_code=404,
@@ -1032,8 +1031,9 @@ def get_metrics_trends(
     end_date: str = Query(...),
     granularity: Literal["hour", "day", "week", "month"] = Query("day"),
     dimensions: str | None = Query(None),
-    _perm: None = Depends(require_permission("trends")),
+    auth: AuthContext = Depends(get_auth_context),
 ) -> MetricsTrendsResponse:
+    require_role("get_metrics_trends", auth, target_project_id=project_id)
     if not STORE.project_exists(project_id):
         raise HTTPException(
             status_code=404,
@@ -1069,8 +1069,9 @@ def get_metrics_breakdown(
     dimension: str = Query(...),
     time_range: Literal["24h", "7d", "30d", "90d"] = Query("7d"),
     filters: str | None = Query(None),
-    _perm: None = Depends(require_permission("breakdown")),
+    auth: AuthContext = Depends(get_auth_context),
 ) -> MetricsBreakdownResponse:
+    require_role("get_metrics_breakdown", auth, target_project_id=project_id)
     if not STORE.project_exists(project_id):
         raise HTTPException(
             status_code=404,
@@ -1117,8 +1118,9 @@ def get_metrics_drilldown(
     sort_order: Literal["asc", "desc"] = Query("desc"),
     limit: int = Query(50, ge=1),
     offset: int = Query(0, ge=0),
-    _perm: None = Depends(require_permission("drilldown")),
+    auth: AuthContext = Depends(get_auth_context),
 ) -> MetricsDrilldownResponse:
+    require_role("get_metrics_drilldown", auth, target_project_id=project_id)
     if not STORE.project_exists(project_id):
         raise HTTPException(
             status_code=404,
@@ -1169,8 +1171,9 @@ def list_metrics_alerts(
     severity: str | None = Query(None),
     acknowledged: str | None = Query(None),
     limit: int = Query(50),
-    _perm: None = Depends(require_permission("alerts")),
+    auth: AuthContext = Depends(get_auth_context),
 ) -> MetricsAlertListResponse:
+    require_role("list_metrics_alerts", auth, target_project_id=project_id)
     if not STORE.project_exists(project_id):
         raise HTTPException(
             status_code=404,
@@ -1202,10 +1205,26 @@ def list_metrics_alerts(
 def acknowledge_alert(
     alert_id: str,
     response: Response,
-    _perm: None = Depends(require_permission("alerts:acknowledge")),
+    project_id: str = Query(...),
+    auth: AuthContext = Depends(get_auth_context),
 ) -> AcknowledgeAlertResponse:
+    require_role("acknowledge_alert", auth, target_project_id=project_id)
     try:
-        result = STORE.acknowledge_alert(alert_id)
+        result = STORE.acknowledge_alert(alert_id, project_id)
+    except ValueError as exc:
+        code = str(exc.args[0]) if exc.args else str(exc)
+        if code == "PROJECT_SCOPE_VIOLATION":
+            raise HTTPException(
+                status_code=403,
+                detail=ErrorResponse(
+                    error={
+                        "code": "PROJECT_SCOPE_VIOLATION",
+                        "message": "Alert does not belong to this project",
+                        "retryable": False,
+                    }
+                ).model_dump(),
+            )
+        raise
     except KeyError:
         raise HTTPException(
             status_code=404,
@@ -1226,8 +1245,9 @@ def acknowledge_alert(
 def get_workflow_actions(
     response: Response,
     project_id: str = Query(...),
-    _perm: None = Depends(require_permission("actions")),
+    auth: AuthContext = Depends(get_auth_context),
 ) -> WorkflowActionsResponse:
+    require_role("get_workflow_actions", auth, target_project_id=project_id)
     if not STORE.project_exists(project_id):
         raise HTTPException(
             status_code=404,
@@ -1255,8 +1275,9 @@ def get_workflow_actions(
 def get_metrics_health(
     response: Response,
     project_id: str = Query(...),
-    _perm: None = Depends(require_permission("health")),
+    auth: AuthContext = Depends(get_auth_context),
 ) -> MetricsHealthResponse:
+    require_role("get_metrics_health", auth, target_project_id=project_id)
     if not STORE.project_exists(project_id):
         raise HTTPException(
             status_code=404,

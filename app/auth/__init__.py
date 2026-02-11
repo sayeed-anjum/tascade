@@ -57,6 +57,15 @@ ENDPOINT_ROLES: dict[str, set[str]] = {
     "get_task":                          set(),
     "list_task_artifacts":               set(),
     "list_integration_attempts":         set(),
+    # Metrics endpoints
+    "get_metrics_summary":               set(),
+    "get_metrics_trends":                set(),
+    "get_metrics_breakdown":             set(),
+    "get_metrics_drilldown":             set(),
+    "list_metrics_alerts":               set(),
+    "acknowledge_alert":                 {"planner"},
+    "get_workflow_actions":              {"planner"},
+    "get_metrics_health":                set(),
 }
 
 
