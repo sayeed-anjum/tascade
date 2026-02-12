@@ -268,7 +268,7 @@ docs/
   PRD.md            # Product requirements
   SRS.md            # System requirements specification
   ARCHITECTURE.md   # Architecture overview
-  MANIFESTO.md      # Design philosophy
+  WHY.md            # Design philosophy
   RUNBOOK.md        # Operations guide
   BACKLOG.md        # Outstanding work items
   api/              # API reference + OpenAPI spec
@@ -286,7 +286,7 @@ scripts/            # Utilities (API key creation, smoke tests, benchmarks)
 | [docs/PRD.md](docs/PRD.md) | Product requirements and success criteria |
 | [docs/SRS.md](docs/SRS.md) | System requirements, domain model, API contract |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Architecture, state machine, auth model |
-| [docs/MANIFESTO.md](docs/MANIFESTO.md) | Design philosophy — why Tascade exists |
+| [docs/WHY.md](docs/WHY.md) | Design philosophy — why Tascade exists |
 | [docs/RUNBOOK.md](docs/RUNBOOK.md) | Installation, deployment, troubleshooting |
 | [docs/api/README.md](docs/api/README.md) | REST API reference |
 | [docs/api/openapi-v0.1.yaml](docs/api/openapi-v0.1.yaml) | OpenAPI 3.1 specification |
