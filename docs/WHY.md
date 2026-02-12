@@ -1,4 +1,4 @@
-# The Orchestration Manifesto
+# Why Tascade
 
 ## The world changed. The tools didn't.
 
