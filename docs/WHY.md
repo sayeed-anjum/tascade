@@ -93,8 +93,10 @@ An orchestrator is the enforcement layer between strategy and execution. It take
 
 ## From Hope to Guarantees
 
+Tascade is a coordinator for dependency-aware, multi-agent software execution. It provides REST APIs and an agent-native MCP interface for task orchestration, policy-driven gates for human governance, and a read-first web console for operational visibility. It doesn't generate plans. It makes plans safe to run.
+
 Without an orchestrator, multi-agent software execution is parallelism plus prayer.
 
 With one, it's parallelism plus proof.
 
-That's why Tascade exists.
+I built Tascade over a weekend because I needed it and it didn't exist. The source is at [github.com/sayeed-anjum/tascade](https://github.com/sayeed-anjum/tascade).
