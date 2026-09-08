@@ -315,6 +315,41 @@ the brief.
 - **Dated plan documents remain** as the source artifact for tasks. Their
   status becomes visible through the tasks that reference them.
 
+### D16. Three server tiers: dev dogfood, per-task test, local in-process
+
+Dogfooding needs a server, and a shared server pointed at a feature branch
+produces failures that belong to neither the branch nor the server. Observed
+on the first task: the shared server ran the design worktree while the worker
+tested against its own branch, so the worker saw HTTP 500s from code older
+than its own and had to spend reasoning ruling that out.
+
+Three tiers, with distinct purposes:
+
+1. **The dev dogfood server** runs from a checkout of `dev` and is the one
+   humans and orchestrators point at. It is rebuilt and restarted when a
+   ticket closes into `dev`, so dogfooding always exercises integrated code.
+   It is the only long-lived server and the only one bound to the operator's
+   network address.
+2. **Per-task test servers** are started by a worker or the pool when a task
+   needs a live server, from that task's worktree, on a port allocated to the
+   task. They are torn down with the task. A worker never verifies against the
+   dev server, and never starts a server on the dev server's port.
+3. **In-process clients** are the default for tests. Most verification needs
+   no server at all, and a test that reaches a real socket should be
+   deliberate.
+
+Consequences:
+
+- Port allocation is a task-scoped resource the pool assigns, alongside the
+  worktree and branch. It belongs in the task's derived state so the brief can
+  show it and a stale server can be found.
+- "Ticket close rebuilds dev" is an integration-time hook, not a deploy: pull
+  `dev`, install, restart the server process in its pane. It runs after the
+  `integrated` transition (D8), which makes the transition the trigger for
+  every downstream refresh rather than a bookkeeping step.
+- The dev server is the natural place to enable authentication first, since it
+  is the one agents share.
+
 ### D14. How VM and remote agents appear in Herdr
 
 Herdr learns an agent's lifecycle from a hook installed into each harness
