@@ -31,6 +31,9 @@ ENDPOINT_ROLES: dict[str, set[str]] = {
     "create_project":                    {"planner", "operator"},
     "create_gate_rule":                  {"planner"},
     "create_gate_decision":              {"reviewer"},
+    "evaluate_gate_policies":            {"planner", "operator"},
+    "create_phase":                      {"planner"},
+    "create_milestone":                  {"planner"},
     "create_task":                       {"planner"},
     "create_dependency":                 {"planner"},
     "create_task_artifact":              {"agent"},
@@ -55,6 +58,7 @@ ENDPOINT_ROLES: dict[str, set[str]] = {
     "get_ready_tasks":                   set(),
     "list_tasks":                        set(),
     "get_task":                          set(),
+    "get_task_context":                  set(),
     "list_task_artifacts":               set(),
     "list_integration_attempts":         set(),
     # Metrics endpoints
@@ -189,8 +193,20 @@ def require_role(
             }},
         )
 
-    # Role check
-    required_roles = ENDPOINT_ROLES.get(endpoint_name, set())
+    # Role check. An endpoint missing from ENDPOINT_ROLES is a registration bug,
+    # not a public endpoint: deny, so that forgetting to register a new endpoint
+    # cannot silently open it. An explicit empty set means "any authenticated key".
+    if endpoint_name not in ENDPOINT_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {
+                "code": "ENDPOINT_NOT_REGISTERED",
+                "message": f"Endpoint {endpoint_name!r} is not registered in ENDPOINT_ROLES",
+                "retryable": False,
+            }},
+        )
+
+    required_roles = ENDPOINT_ROLES[endpoint_name]
     if not required_roles:
         return  # Any authenticated key is allowed
 
