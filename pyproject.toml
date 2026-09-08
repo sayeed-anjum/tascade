@@ -13,6 +13,9 @@ dependencies = [
   "aiofiles>=24.0.0",
 ]
 
+[project.scripts]
+tascade = "app.cli.main:main"
+
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0.0",

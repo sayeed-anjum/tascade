@@ -1,0 +1,126 @@
+"""Command table shape, MCP parity, and the thin-client boundary."""
+
+from pathlib import Path
+
+import pytest
+
+from app.cli.commands import COMMANDS, Arg, Command, find_command
+from app.cli.main import build_parser, main
+from app.mcp_server import MCP_TOOL_NAMES
+
+CLI_ROOT = Path(__file__).resolve().parents[1] / "app" / "cli"
+
+
+def _covered_tools() -> set[str]:
+    return {command.mcp_tool for command in COMMANDS if command.mcp_tool}
+
+
+class TestMcpParity:
+    def test_every_mcp_tool_has_a_cli_command(self):
+        missing = set(MCP_TOOL_NAMES) - _covered_tools()
+        assert missing == set(), f"MCP tools with no CLI subcommand: {sorted(missing)}"
+
+    def test_no_command_claims_an_unknown_mcp_tool(self):
+        unknown = _covered_tools() - set(MCP_TOOL_NAMES)
+        assert unknown == set(), f"CLI commands naming a non-existent MCP tool: {sorted(unknown)}"
+
+    def test_mcp_tool_mapping_is_one_to_one(self):
+        tools = [command.mcp_tool for command in COMMANDS if command.mcp_tool]
+        assert len(tools) == len(set(tools))
+
+
+class TestCommandTable:
+    def test_command_paths_are_unique(self):
+        paths = [command.path for command in COMMANDS]
+        assert len(paths) == len(set(paths))
+
+    def test_every_command_has_help_text(self):
+        assert all(command.help for command in COMMANDS)
+
+    def test_every_path_argument_appears_in_the_url_template(self):
+        for command in COMMANDS:
+            for arg in command.args:
+                if arg.location == "path":
+                    assert "{" + arg.dest + "}" in command.url, command.path
+
+    def test_every_url_placeholder_has_a_path_argument(self):
+        for command in COMMANDS:
+            placeholders = {
+                piece.split("}")[0] for piece in command.url.split("{")[1:]
+            }
+            path_args = {arg.dest for arg in command.args if arg.location == "path"}
+            assert placeholders == path_args, command.path
+
+    def test_get_commands_send_no_body_arguments(self):
+        for command in COMMANDS:
+            if command.method == "GET":
+                assert all(arg.location != "body" for arg in command.args), command.path
+
+    def test_find_command_resolves_a_path(self):
+        assert find_command(("tasks", "claim")).mcp_tool == "claim_task"
+
+    def test_find_command_returns_none_for_unknown_path(self):
+        assert find_command(("tasks", "nope")) is None
+
+
+def _minimal_argv(command: Command) -> list[str]:
+    argv: list[str] = list(command.path)
+    for arg in command.args:
+        if not arg.required:
+            continue
+        if arg.location == "path":
+            argv.append("value")
+        elif arg.kind == "json":
+            argv.extend([arg.name, "{}"])
+        elif arg.kind == "int":
+            argv.extend([arg.name, "0"])
+        else:
+            argv.extend([arg.name, "value"])
+    return argv
+
+
+class TestParser:
+    def test_every_command_is_reachable_and_accepts_json(self):
+        parser = build_parser()
+        for command in COMMANDS:
+            namespace = parser.parse_args([*_minimal_argv(command), "--json"])
+            assert namespace.json is True, command.path
+            assert namespace._command is command, command.path
+
+    def test_json_defaults_to_false(self):
+        parser = build_parser()
+        namespace = parser.parse_args(_minimal_argv(find_command(("projects", "list"))))
+        assert namespace.json is False
+
+    def test_global_url_and_api_key_flags_exist(self):
+        parser = build_parser()
+        namespace = parser.parse_args(
+            ["--url", "http://x:1", "--api-key", "k", *_minimal_argv(find_command(("projects", "list")))]
+        )
+        assert namespace.url == "http://x:1"
+        assert namespace.api_key == "k"
+
+    def test_missing_required_argument_is_a_usage_error(self):
+        parser = build_parser()
+        with pytest.raises(SystemExit):
+            parser.parse_args(["tasks", "claim", "task-1"])
+
+
+class TestThinClientBoundary:
+    def test_cli_never_imports_the_server_side(self):
+        source = "\n".join(path.read_text() for path in sorted(CLI_ROOT.glob("*.py")))
+        for banned in ("app.store", "app.mcp_tools", "app.main", "sqlalchemy", "fastapi"):
+            assert banned not in source, f"{banned} must not be imported by the CLI"
+
+
+class TestSkillFlag:
+    def test_skill_flag_prints_the_skill_file(self, capsys):
+        assert main(["--skill"]) == 0
+        out = capsys.readouterr().out
+        assert "tascade tasks claim" in out
+
+    def test_skill_file_documents_every_command_path(self):
+        text = (Path(__file__).resolve().parents[1] / "docs" / "cli-skill.md").read_text()
+        for command in COMMANDS:
+            invocation = " ".join(("tascade", *command.path))
+            assert invocation in text, f"docs/cli-skill.md does not document: {invocation}"
