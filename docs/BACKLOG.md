@@ -134,15 +134,24 @@ read at the start of several real sessions.
 
 These remain valid and fold into slice 1 item 1.
 
+**Closed by slice 1 item 1** (2026-09-08, task `P1.M1.T1`):
+
 - Phase and milestone creation over REST: `POST /v1/phases` and
   `POST /v1/milestones`. Found while seeding on 2026-09-08: task creation
-  requires a milestone for short-id generation, but only the MCP tools can
+  requires a milestone for short-id generation, but only the MCP tools could
   create one.
 - REST task context endpoint: `GET /v1/tasks/{task_id}/context` with
   `ancestor_depth` and `dependent_depth`, parity with the existing MCP tool.
+- Canonical context default depths: both depths default to `1` in REST, the
+  CLI, and the MCP tool.
+- Two further MCP tools had no REST equivalent and were found the same way, so
+  a thin client could not reach them: `POST /v1/gates/evaluate` and
+  `GET /v1/instructions`.
+
+**Still open:**
+
 - Execution snapshot retrieval: `GET /v1/tasks/{task_id}/execution-snapshots`.
-- Canonical context default depths, applied consistently across REST, CLI,
-  and docs.
+  A claim returns its snapshot, but there is no way to read one back later.
 - Task changelog: decide between an append-only changelog model and the
   event log alone, and update PRD and SRS accordingly.
 
