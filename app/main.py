@@ -22,11 +22,15 @@ from app.schemas import (
     EnqueueIntegrationAttemptRequest,
     CreateGateDecisionRequest,
     CreateGateRuleRequest,
+    CreateMilestoneRequest,
+    CreatePhaseRequest,
     CreateProjectRequest,
     CreateTaskRequest,
     DependencyEdge,
     ErrorResponse,
+    EvaluateGatePoliciesRequest,
     GetReadyTasksResponse,
+    InstructionsResponse,
     ListGateCheckpointsResponse,
     HeartbeatRequest,
     HeartbeatResponse,
@@ -45,13 +49,16 @@ from app.schemas import (
     MetricsHealthResponse,
     MetricsSummaryResponse,
     MetricsTrendsResponse,
+    Milestone,
     MilestoneHealthItem,
     MilestoneTaskSummary,
+    Phase,
     PlanChangeset,
     PlanVersion,
     Project,
     ProjectGraphResponse,
     Task,
+    TaskContextResponse,
     TaskExecutionSnapshot,
     TaskStateTransitionRequest,
     TaskStateTransitionResponse,
@@ -66,6 +73,7 @@ from app.schemas import (
     WorkflowActionsResponse,
     WorkflowSuggestion,
 )
+from app.instructions import INSTRUCTIONS
 from app.auth import AuthContext, get_auth_context, hash_api_key, require_role, VALID_ROLES
 from app.store import STORE
 
@@ -83,6 +91,16 @@ async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/v1/instructions", response_model=InstructionsResponse)
+def get_instructions() -> InstructionsResponse:
+    """The Tascade protocol guide, mirroring the MCP ``get_instructions`` tool.
+
+    Unauthenticated like ``/health`` so an agent can read the protocol before it
+    has a key.
+    """
+    return InstructionsResponse(instructions=INSTRUCTIONS)
 
 
 @app.post("/v1/projects", response_model=Project, status_code=status.HTTP_201_CREATED)
@@ -194,6 +212,29 @@ def create_gate_decision(payload: CreateGateDecisionRequest, auth: AuthContext =
     return GateDecision(**decision)
 
 
+@app.post("/v1/gates/evaluate")
+def evaluate_gate_policies(payload: EvaluateGatePoliciesRequest, auth: AuthContext = Depends(get_auth_context)) -> dict:
+    require_role("evaluate_gate_policies", auth, target_project_id=payload.project_id)
+    if not STORE.project_exists(payload.project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    try:
+        return STORE.evaluate_gate_policies(
+            project_id=payload.project_id, actor_id=payload.actor_id, policy=payload.policy
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=ErrorResponse(
+                error={"code": str(exc), "message": str(exc), "retryable": False}
+            ).model_dump(),
+        )
+
+
 @app.get("/v1/gate-decisions", response_model=ListGateDecisionsResponse)
 def list_gate_decisions(
     project_id: str,
@@ -249,6 +290,64 @@ def list_gate_checkpoints(
         offset=offset,
     )
     return ListGateCheckpointsResponse(items=items, total=total, limit=limit, offset=offset)
+
+
+@app.post("/v1/phases", response_model=Phase, status_code=status.HTTP_201_CREATED)
+def create_phase(payload: CreatePhaseRequest, auth: AuthContext = Depends(get_auth_context)) -> Phase:
+    require_role("create_phase", auth, target_project_id=payload.project_id)
+    if not STORE.project_exists(payload.project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    try:
+        phase = STORE.create_phase(
+            project_id=payload.project_id, name=payload.name, sequence=payload.sequence
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=ErrorResponse(
+                error={"code": str(exc), "message": str(exc), "retryable": False}
+            ).model_dump(),
+        )
+    return Phase(**phase)
+
+
+@app.post("/v1/milestones", response_model=Milestone, status_code=status.HTTP_201_CREATED)
+def create_milestone(payload: CreateMilestoneRequest, auth: AuthContext = Depends(get_auth_context)) -> Milestone:
+    require_role("create_milestone", auth, target_project_id=payload.project_id)
+    if not STORE.project_exists(payload.project_id):
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
+            ).model_dump(),
+        )
+    try:
+        milestone = STORE.create_milestone(
+            project_id=payload.project_id,
+            name=payload.name,
+            sequence=payload.sequence,
+            phase_id=payload.phase_id,
+        )
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "PHASE_NOT_FOUND", "message": "Phase not found", "retryable": False}
+            ).model_dump(),
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=ErrorResponse(
+                error={"code": str(exc), "message": str(exc), "retryable": False}
+            ).model_dump(),
+        )
+    return Milestone(**milestone)
 
 
 @app.post("/v1/tasks", response_model=Task, status_code=status.HTTP_201_CREATED)
@@ -449,6 +548,32 @@ def get_task(task_id: str, auth: AuthContext = Depends(get_auth_context)) -> Tas
         )
     require_role("get_task", auth, target_project_id=task["project_id"])
     return Task(**task)
+
+
+@app.get("/v1/tasks/{task_id}/context", response_model=TaskContextResponse)
+def get_task_context(
+    task_id: str,
+    project_id: str,
+    ancestor_depth: int = 1,
+    dependent_depth: int = 1,
+    auth: AuthContext = Depends(get_auth_context),
+) -> TaskContextResponse:
+    require_role("get_task_context", auth, target_project_id=project_id)
+    try:
+        context = STORE.get_task_context(
+            project_id=project_id,
+            task_id=task_id,
+            ancestor_depth=ancestor_depth,
+            dependent_depth=dependent_depth,
+        )
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "TASK_NOT_FOUND", "message": "Task not found", "retryable": False}
+            ).model_dump(),
+        )
+    return TaskContextResponse(**context)
 
 
 @app.post("/v1/tasks/{task_id}/artifacts", response_model=Artifact, status_code=status.HTTP_201_CREATED)

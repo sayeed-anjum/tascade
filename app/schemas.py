@@ -434,6 +434,42 @@ class Milestone(BaseModel):
     updated_at: str
 
 
+class CreatePhaseRequest(BaseModel):
+    project_id: str
+    name: str = Field(min_length=1)
+    sequence: int = 0
+
+
+class CreateMilestoneRequest(BaseModel):
+    project_id: str
+    phase_id: str
+    name: str = Field(min_length=1)
+    sequence: int = 0
+
+
+class EvaluateGatePoliciesRequest(BaseModel):
+    project_id: str
+    actor_id: str
+    policy: dict[str, Any] = Field(default_factory=dict)
+
+
+class TaskContextNeighbor(BaseModel):
+    id: str
+    title: str
+    state: str
+    depth: int
+
+
+class TaskContextResponse(BaseModel):
+    task: dict[str, Any]
+    ancestors: list[TaskContextNeighbor]
+    dependents: list[TaskContextNeighbor]
+
+
+class InstructionsResponse(BaseModel):
+    instructions: str
+
+
 class GraphTask(BaseModel):
     """Task representation for the project graph endpoint.
 
