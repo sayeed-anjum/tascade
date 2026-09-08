@@ -474,8 +474,8 @@ class GraphTask(BaseModel):
     """Task representation for the project graph endpoint.
 
     Uses ``dict`` for ``work_spec`` so that enriched fields such as
-    ``candidate_readiness`` are preserved in the response, matching the
-    Project graph output shape.
+    ``candidate_readiness`` are preserved in the response rather than being
+    dropped by a narrower model.
     """
 
     id: str

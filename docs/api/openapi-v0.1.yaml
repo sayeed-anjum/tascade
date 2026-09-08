@@ -2243,9 +2243,9 @@ components:
 
         Uses ``dict`` for ``work_spec`` so that enriched fields such as
 
-        ``candidate_readiness`` are preserved in the response, matching the
+        ``candidate_readiness`` are preserved in the response rather than being
 
-        MCP ``get_project_graph`` output shape.'
+        dropped by a narrower model.'
     HTTPValidationError:
       properties:
         detail:
