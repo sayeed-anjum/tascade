@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "tascade"
 version = "0.1.0"
@@ -21,6 +25,15 @@ dev = [
   "pytest>=8.0.0",
   "mcp>=1.13.0",
 ]
+
+[tool.setuptools.packages.find]
+# Flat layout: ship the application package only, not web/, tests/ or docs/.
+include = ["app*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+# `tascade --skill` must work from an installed wheel, where there is no docs/.
+"app.cli" = ["cli-skill.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
