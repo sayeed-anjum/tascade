@@ -75,8 +75,20 @@ evidence for each.
 - Add `approach`, `open_questions`, `handoff_summary` as agent-written fields
   with attribution.
 - Add `attempt_count` maintained by the store.
+- Add `pr_url` to the artifact record, alongside `branch` and `commit_sha`, one
+  artifact per attempt, and expose `review_url` on the task derived from its
+  latest artifact so there is one source and no field to keep in sync. The
+  value is written by the done-condition evaluator, which resolves the pull
+  request anyway to obtain the immutable head SHA (D8); a worker-supplied link
+  is navigation, never evidence. Until the evaluator exists (slice 2 item 10)
+  the field is populated by whoever publishes the artifact and is treated as
+  unverified.
+- The field is code work and belongs here, not to the docs task that recorded
+  the decision.
 - Acceptance: fields round-trip through REST and CLI; `handoff_summary` is
-  required on the `in_progress -> implemented` transition.
+  required on the `in_progress -> implemented` transition; a task at
+  `implemented` exposes a resolvable `review_url`, and one that does not is
+  surfaced by the brief as a defect.
 
 4. Operational run task class (D5)
 - Add `operational_run` to task classes. A run is a normal task plus an

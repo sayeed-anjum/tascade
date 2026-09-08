@@ -211,9 +211,11 @@ field can be trusted and how it can go stale.
 **Derived at read time, never stored as typed input**
 
 Harness, host, pane or VM, lifecycle status, branch, worktree path, head SHA,
-PR number and state, last heartbeat, time in state, attempt count, and lease
-staleness. These come from Herdr, Slicer, git, GitHub, and Tascade's own
-tables.
+pull request number and state, `review_url`, last heartbeat, time in state,
+attempt count, and lease staleness. These come from Herdr, Slicer, git, GitHub,
+and Tascade's own tables. `review_url` in particular is derived from the task's
+latest artifact, whose `pr_url` the evaluator resolved (D8); it is never typed
+and never copied onto the task.
 
 No free-text status field is added. Status is the state machine. Free-text
 status is how trackers become fiction.
@@ -409,9 +411,27 @@ cannot reach, and it:
    stale relative to that SHA.
 5. Runs task-specific checks itself, from an allowlist, in the trusted runner,
    against a fresh checkout of the resolved SHA.
-6. Records the attestation: evaluated head SHA, base SHA, required check names
-   and conclusions, task-check commands and their outputs, evaluator identity,
-   and timestamp.
+6. Records the attestation: the resolved pull request URL, evaluated head SHA,
+   base SHA, required check names and conclusions, task-check commands and
+   their outputs, evaluator identity, and timestamp.
+
+The pull request URL is a product of step 2, not a separate assertion. The
+evaluator has to resolve the pull request to obtain the immutable head SHA, so
+it already holds the URL and records what it resolved. A link a worker supplies
+is navigation and never evidence; where the two differ, the resolved one wins
+and the difference is a failure by the same rule as a SHA mismatch.
+
+**This is what makes `implemented` actionable.** The state exists so a human can
+review the work, and a human reviewing it needs to reach the pull request in one
+step. The artifact record carries `pr_url` alongside `branch` and `commit_sha`,
+one artifact per attempt; the task exposes `review_url` derived from its latest
+artifact, so there is one source of the link and no second field to keep in
+sync. The brief's needs-a-human section (D11) and the graph view's node detail
+both link to it. A task sitting at `implemented` with no resolvable review URL
+is a defect to be surfaced, not a normal state: it means either that the
+attestation did not record what it resolved, or that the task reached
+`implemented` without one, which §5 V1 says is possible today and slice 0
+closes.
 
 The `in_progress -> implemented` transition takes the attestation id and is
 refused without one. The attestation is immutable and is the artifact a
@@ -478,8 +498,12 @@ derived state. Slice 1 ships it local-only: everything below that comes from
 Tascade and from git in the local checkouts, and nothing else. It prints, in
 this order:
 
-1. What needs a human: blocked tasks with reasons, tasks past attempt cap, PRs
-   awaiting merge, open questions written by agents.
+1. What needs a human: blocked tasks with reasons, tasks past attempt cap,
+   pull requests awaiting merge, open questions written by agents. Every task at
+   `implemented` and every pull request awaiting merge prints its `review_url`,
+   so the line a human reads is the link they follow. A task at `implemented`
+   whose review URL does not resolve is listed as a defect here rather than
+   omitted (D8).
 2. What is running: each role and worker with its task, time in state, last
    heartbeat, host, and substrate. Stale heartbeats flagged. Panes or VMs with
    no task, and tasks with no live pane or heartbeat, flagged as drift.
@@ -509,7 +533,7 @@ progress, not the whole project graph: boxes in a left-to-right dependency flow,
 done nodes grey, ready nodes outlined, claimed nodes filled with the holding
 agent and heartbeat age, blocked nodes marked with the reason, milestone
 boundaries as swimlanes, and a node detail panel showing intent, done condition,
-pull request, and handoff summary. It reuses the brief's fields; it does not
+handoff summary, and the `review_url` as a link. It reuses the brief's fields; it does not
 define its own.
 
 ### D12. Herdr and Slicer state joins Tascade by identity, never by name
@@ -848,7 +872,7 @@ its subsequent heartbeats fail. This was hit while working on this document.
 | D5 operational runs | Task classes: architecture, db_schema, security, cross_cutting, review_gate, merge_gate, frontend, backend, crud, other | An `operational_run` class and the run artifact. The step engine is deferred |
 | D6 role and worker records | Leases carry a free-text `agent_id` string | The role record: role and prompt versions, authority profile version, harness binding, execution identity, escalation and idempotency state, handoff state. Role-level lease and cap enforcement, which needs V2 fixed first |
 | D7 pool daemon | Nothing | The daemon, attempt records, worker-owned heartbeat identity, supervisor heartbeat, fence-checked writes, reconciliation, idempotent launch, substrate adapters |
-| D8 attestation floor | `ArtifactModel` accepts agent-supplied `commit_sha`, `check_suite_ref`, and `check_status`; `integrated` requires non-self review with evidence refs | The evaluator, the trusted runner, protected required-check configuration, the attestation record, and making `implemented` conditional on it. Fixes V1 |
+| D8 attestation floor | `ArtifactModel` accepts agent-supplied `commit_sha`, `check_suite_ref`, and `check_status`, all unvalidated; `integrated` requires non-self review with evidence refs | The evaluator, the trusted runner, protected required-check configuration, the attestation record with its resolved `pr_url`, the task's derived `review_url`, and making `implemented` conditional on the attestation. Fixes V1. Note that CI on this branch currently fails at dependency install with "Multiple top-level packages discovered in a flat-layout: ['app', 'web']", before any test runs, so even the old "CI green" floor is not presently available; that packaging break is its own task |
 | D9 orchestrator plans only | Non-self-review enforcement on `integrated`; gate rules and gate decisions | The orchestrator role itself and the review role agent |
 | D10 sandboxes push, humans merge | Branch protection is a forge setting, in place | Scoped push-and-PR credentials, delivery through the Slicer proxy secret mechanism, egress allow rules derived from the permission set |
 | D11 the brief | Web console with a graph and dashboard; metrics endpoints | `tascade brief`, its cursor state, the five sections, drift detection. External-source joins staged one at a time. Graph view deferred to slice 3. Needs V4 for the roadmap section |
