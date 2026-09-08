@@ -538,30 +538,45 @@ invisible to Herdr unless something on the host reports on its behalf.
 
 Two mechanisms, layered:
 
-**Baseline: the pool reports for the agent, from Tascade state.** For every
-worker it launches on a non-local substrate, the pool opens a host pane that
-attaches to the VM session (`slicer <harness> <vm-name>`), names the pane by
-the task short id, and takes lifecycle authority for it with
-`herdr pane report-agent --source pool`. It maps state from what it already
-knows: a fresh heartbeat is `working`, a non-empty `open_questions` field or a
-`blocked` task is `blocked`, a released lease is `idle`. The agent then appears
-in `herdr agent list` with the correct name, harness label, and status, and
-because the pane is attached, `herdr agent read` and `herdr agent prompt` work
-through it. This mechanism works for any substrate, cloud included, because
-the only input is Tascade.
+**Baseline for Slicer: the pool reports for the agent, from Tascade state.**
+For every worker it launches into a VM, the pool opens a host pane that attaches
+to the VM session (`slicer <harness> <vm-name>`, assumption A9), labels the pane
+with the task short id, writes the D12 join tuple, and takes lifecycle authority
+with `herdr pane report-agent --source pool`. It maps state from what it already
+knows: a fresh worker heartbeat is `working`, a non-empty `open_questions` field
+or a `blocked` task is `blocked`, a released lease is `idle`. The agent then
+appears in `herdr agent list` with the right label and status, and because the
+pane is attached, `herdr agent read` and `herdr agent prompt` reach the agent
+through it.
 
-**Upgrade for Slicer: Herdr inside the VM, connected as a machine.** Herdr's
-stated direction is that any sandbox, VM, or remote server runs its own Herdr
-server and connects to the operator's other machines; Herdr 0.9 does this
-over SSH with `herdr machine add`, and Herdr Cloud is announced as the
-follow-on that removes the reachability requirement. Every Slicer VM ships
-with SSH, so this works today: bake the Herdr server and the harness hook
-into the golden image, and have the pool add each launched VM as a machine.
-The harness hook then reports natively to the in-VM server, and the operator's
-window shows the VM's agents in the combined sidebar with full fidelity. This
-is preferred over forwarding the host socket into the VM. It is an upgrade to
-the human view only: the agent CLI remains single-server (D15), so control
-still flows through Tascade and the per-host daemon.
+**This does not extend to cloud sessions, and an earlier draft was wrong to say
+it did.** Attaching a host pane is a Slicer mechanism: it works because there is
+a local process holding a terminal into the VM. A cloud worker may be headless,
+behind NAT, or have no attachable terminal at all. Reporting a synthetic Herdr
+agent for it would make a row appear in `herdr agent list`, but `herdr agent
+read` and `herdr agent prompt` would have nothing to reach; the row would be a
+picture of Tascade state wearing a control surface it does not have, which is
+exactly the hallucinated supervision constraint 1 forbids. Cloud workers are
+therefore observe-only until a tested remote-control adapter exists per harness
+(assumption A10). Observe, interrupt, and prompt are declared per substrate in
+§4, and the pool offers only what the substrate declares.
+
+**Upgrade for Slicer, contingent: Herdr inside the VM, connected as a machine.**
+Herdr's stated direction is that any sandbox, VM, or remote server runs its own
+Herdr server and connects to the operator's other machines, over SSH with
+`herdr machine add` in 0.9 (assumption A4, read not exercised; the installed
+binary is 0.8.2 and has no `machine` subcommand). Every Slicer VM ships with SSH
+(A7, verified), so the shape is available in principle: bake the Herdr server
+and the harness hook into the golden image, and have the pool add each launched
+VM as a machine. The harness hook would then report natively to the in-VM
+server, and the operator's window would show the VM's agents in the combined
+sidebar with full fidelity. That this can be baked into an image and reached is
+assumption A8 and has not been attempted; the probe is in §4. This is preferred
+over forwarding the host socket into the VM.
+
+It is an upgrade to the human view only. The agent CLI remains single-server
+(D15, assumption A5), so control still flows through Tascade and the per-host
+daemon, and if A4 or A8 turn out false the baseline above is unaffected.
 
 Layout conventions, applied by the pool:
 
@@ -582,21 +597,25 @@ brief, not Herdr, is the primary answer to "what is running".
 
 ### D15. Herdr across machines is a viewing layer, not a control layer
 
-Verified against the installed binary (0.8.2), the 0.9 documentation, and the
-"Connecting the machines" announcement.
+Checked on 2026-09-08. What follows separates what was exercised against the
+installed 0.8.2 binary from what was read in the 0.9 documentation and the
+"Connecting the machines" announcement; the assumption ids point at §4, where
+each unexercised claim carries a probe.
 
 - Each machine runs its own Herdr server with its own sessions and processes.
   Named sessions are additional servers on the same machine.
 - Herdr 0.9 lets one client window show saved SSH machines side by side, with
   agents from every connected machine in the sidebar. This is the human's
-  unified view.
+  unified view. Read only, not exercised here (A4).
 - The socket API and the `herdr` CLI remain single-server. Workspace, tab,
   pane ids, and agent names are scoped to one server; two machines may both
-  hold `w1:p1` or an agent named `reviewer`. The announcement states the agent
+  hold `w1:p1` or an agent named `reviewer`. Server scoping and the name rule
+  are exercised facts about 0.8.2 (A1, A2). The announcement states the agent
   CLI "doesn't yet see the agents running on your other machines" and that
-  cross-machine CLI is intended for a later release. Herdr Cloud, a connection
-  layer, and moving agent sessions between machines are also stated as future
-  work.
+  cross-machine CLI is intended for a later release; that is read only (A5).
+  Herdr Cloud, a connection layer, and moving agent sessions between machines
+  are stated as future work with no version or date, and are treated here as
+  speculative (A6). Nothing in this design may depend on them.
 - A cloud session or an ephemeral VM has no Herdr server at all unless one is
   deliberately installed and attached over SSH.
 
@@ -622,9 +641,55 @@ Consequences for this design, all of which reinforce earlier decisions:
    does not depend on that shipping.
 
 Upgrading to Herdr 0.9 is recommended for the multi-machine sidebar. It does
-not change any control-plane decision.
+not change any control-plane decision, and the design must continue to work on
+0.8.2, which is what is installed. Where a 0.9 or Cloud capability is absent,
+the system fails closed and says so in the brief rather than degrading
+silently.
 
-## 4. Sequencing
+## 4. Assumptions of record
+
+Every claim below about Herdr 0.9, Herdr Cloud, and Slicer that this design
+leans on is recorded here with its source, the date it was checked, whether it
+was exercised in this environment or only read, and the probe that would settle
+it. The distinction that matters is between *exercised against the installed
+0.8.2 binary on this machine* and *read in documentation or an announcement*.
+A decision may not depend on an unexercised assumption without degrading
+visibly when it turns out false.
+
+The installed versions on the day of writing: `herdr 0.8.2` (stable channel,
+server and client both 0.8.2, protocol 20) and `slicer 0.1.222`.
+
+| # | Claim | Source | Checked | Status | Acceptance probe |
+|---|---|---|---|---|---|
+| A1 | Herdr panes accept lifecycle reports: `pane report-agent`, `report-agent-session` with `--agent-session-id`, `report-metadata`, `release-agent` | Installed binary help | 2026-09-08 | Exercised: present in 0.8.2 | — |
+| A2 | Agent names must match `[a-z][a-z0-9_-]{0,31}`, are unique only among live agents on one server, and are cleared when the agent exits, is released, or is replaced | Installed binary help | 2026-09-08 | Exercised: stated by 0.8.2 | Rename an agent to a taken name; expect `agent_name_taken`. Exit an agent; expect its name to free. |
+| A3 | Metadata token keys are constrained to `[A-Za-z0-9_-]{1,32}`, values are strings | Socket API schema in the installed binary | 2026-09-08 | Exercised: present in 0.8.2 | Write a `tascade` token and read it back through `pane get --json`. |
+| A4 | Herdr 0.9 connects saved SSH machines into one client window via `herdr machine add` | 0.9 documentation and the "Connecting the machines" announcement | 2026-09-08 | **Read only.** The installed 0.8.2 has no `machine` subcommand; `herdr machine --help` falls through to top-level usage | On a 0.9 install: `herdr machine add <ssh-target>`, then the sidebar lists that machine's agents and each record carries its server id. |
+| A5 | The Herdr agent CLI remains single-server in 0.9; cross-machine CLI is a later release | Same announcement | 2026-09-08 | **Read only** | On a 0.9 client with a machine attached, `herdr agent read <name-live-only-on-remote>` returns not-found. |
+| A6 | Herdr Cloud removes the reachability requirement | Announcement, stated as future work | 2026-09-08 | **Speculative.** No version, no date | None available. Nothing in this design may depend on it. |
+| A7 | Every Slicer VM ships with SSH | Slicer CLI help, 0.1.222 | 2026-09-08 | Exercised: stated by the installed CLI | — |
+| A8 | A Herdr server and harness hooks can be baked into a Slicer golden image and reached over SSH | Inference from A4 and A7 | 2026-09-08 | **Not verified.** Neither the image build nor the in-VM server has been attempted | Build the image, boot a VM, `ssh <vm> herdr status` reports a running server, `herdr machine add` from the host lists that VM's agents with native lifecycle states. |
+| A9 | `slicer <harness> <vm-name>` attaches a host pane to an agent session inside an existing VM | Slicer CLI help lists `claude`, `codex`, `pi`, `amp`, `copilot`, `opencode` as "launch a sandbox and attach to the agent session" | 2026-09-08 | **Partly read only.** Launch-and-attach is documented; attaching to an already-running named VM is not exercised | Launch a VM, detach, then re-attach by name from a second host pane and read output. |
+| A10 | A cloud session can be observed, interrupted, or prompted from the host | None | 2026-09-08 | **Assumed false** until a harness-specific adapter is tested | Per harness: read the session's output, send an interrupt, and submit a prompt, from the host, with no local pane. |
+
+**Substrate capabilities are declared, not inferred.** Each substrate declares
+three capabilities independently, and the pool and the brief use only what is
+declared.
+
+| Substrate | Observe | Interrupt | Prompt |
+|---|---|---|---|
+| Local Herdr pane | yes (A1) | yes | yes |
+| Slicer microVM | yes, via VM health and the attached host pane (A9) | yes, VM stop | conditional on A9 |
+| Cloud session | worker heartbeat and task state only | no, until an adapter exists (A10) | no, until an adapter exists (A10) |
+
+A cloud worker is observe-only. This is a real limitation and is stated here so
+it is not rediscovered: a cloud worker that goes wrong is cancelled by expiring
+its attempt (D7), not by talking to it.
+
+Slice 1 depends on none of A4 through A10. It uses the local substrate, the
+0.8.2 reporting verbs, and Tascade's own state.
+
+## 7. Sequencing
 
 The risk that applies to this effort is the one that stalled Tascade
 previously: if the first useful slice requires the daemon and the graph view,
@@ -655,7 +720,7 @@ one that makes a live session legible, seeded with real work.
 
 The backlog in `docs/BACKLOG.md` carries the item-level detail.
 
-## 5. Open questions
+## 8. Open questions
 
 Deliberately unresolved. Each should be closed by a follow-up decision, not by
 default.
@@ -672,7 +737,7 @@ default.
 4. **Legacy MCP server.** Whether it is kept for compatibility or removed once
    the CLI covers the surface.
 
-## 6. What the field says, and how it was folded in
+## 9. What the field says, and how it was folded in
 
 Consulted 2026-09-08. These informed D7, D8, and D9.
 
