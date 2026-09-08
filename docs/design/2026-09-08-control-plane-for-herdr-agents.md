@@ -2,6 +2,8 @@
 
 **Status:** Proposed
 **Date:** 2026-09-08
+**Revised:** 2026-09-08, after adversarial review. Eleven findings, dispositions
+in §6.
 **Participants:** Sayeed Anjum, Claude (orchestration session)
 **Supersedes in part:** `docs/PRD.md` (MCP-first interface, single-host assumption), `docs/SRS.md` §System Context (agent interface), `docs/ARCHITECTURE.md` (component list), `docs/BACKLOG.md` (replaced)
 
@@ -9,6 +11,10 @@ This document records the design conversation that re-scoped Tascade from an
 MCP-served task store into the control plane for a multi-machine, multi-harness
 agent fleet managed through Herdr. It is written to be read later without the
 conversation. Where a decision was deliberately left open, it says so.
+
+It is a proposal. §5 says, per decision, what exists today and what does not,
+and §6 records an adversarial review of the first draft and what each of its
+findings changed. Nothing here should be read as describing the system as built.
 
 ---
 
@@ -802,6 +808,94 @@ its attempt (D7), not by talking to it.
 Slice 1 depends on none of A4 through A10. It uses the local substrate, the
 0.8.2 reporting verbs, and Tascade's own state.
 
+## 5. Current state versus required migration
+
+This document is a proposal. Almost none of it exists. An earlier draft wrote
+proposal scope in the present tense - subprojects, agent records, orientation
+fields, attempt counts, operational runs, a CLI, a daemon, a done-condition
+evaluator, Herdr and Slicer integration, server tiers - none of which is built.
+This section is the correction, and it is the thing to read before planning any
+of the work.
+
+Verified against `app/store.py`, `app/models.py`, `app/auth.py`, `README.md`,
+and `.env.example` on 2026-09-08.
+
+### Defects in what does exist
+
+These four are not gaps in the proposal; they are the current implementation
+failing to hold invariants the rest of this design assumes. They come first in
+the sequencing for that reason.
+
+| # | Defect | Evidence | Consequence |
+|---|---|---|---|
+| V1 | `transition_task_state` touches no lease token, fence, artifact, commit, or check status | `app/store.py` `transition_task_state`: it validates the state edge, and for `integrated` requires a non-self `reviewed_by` with evidence refs, and nothing more | Any caller can move a task `in_progress -> implemented` with no commit, no artifact, and no lease. The completion floor of D8 has no enforcement point today, and the provenance rule AGENTS.md requires is honoured only by convention. |
+| V2 | `fencing_counter` is created at 1 and never incremented anywhere | `app/models.py` sets `default=1`; no assignment to it exists in `app/store.py` | There is no fencing. A superseded attempt's writes are indistinguishable from the current holder's. D6, D7, and D12 all rest on a fence that does not move. |
+| V3 | There is no expired-lease sweep; `expires_at` is a timestamp nothing reads | `LeaseStatus.EXPIRED` is defined in `app/models.py` and never assigned in `app/store.py`; no query filters on `expires_at` | A lease is never reclaimed. Heartbeat expiry, which D7 and D8 make the basis of retry, currently has no effect at all. |
+| V4 | `MilestoneModel` has no active or status field | `app/models.py` `MilestoneModel`: id, project, phase, name, sequence, number, short id, timestamps | "Active milestone" in the brief (D11) is not derivable. Slice 1 infers it and labels it inferred. |
+
+A fifth, milder one: the transition from `claimed` releases the active lease, so
+a worker that claims and then transitions to `in_progress` loses its lease and
+its subsequent heartbeats fail. This was hit while working on this document.
+
+### Per decision
+
+| Decision | Exists today | Must be built |
+|---|---|---|
+| D1 control plane, colocated, authenticated | REST API on FastAPI; project-scoped API keys with role scopes; PostgreSQL and SQLite both supported | Auth actually on: `TASCADE_AUTH_DISABLED=1` is in `.env.example`, is documented in the README as the local-development default, and the dogfood server runs with it. Deployment alongside the Herdr server; per-machine endpoint and key config |
+| D2 CLI is the agent interface | MCP server and its tool surface; REST API | The `tascade` CLI, `--json` on every subcommand, config file, skill file, parity tests |
+| D3 subprojects | Project, phase, milestone, task; short ids | Subproject level, its short-id prefix, dependency-graph scoping, optional phases and milestones |
+| D4 orientation fields | Task title, description, `work_spec`, class, capability tags, path hints | `intent`, `source_artifact`, `decision_boundary`, `done_condition`, `budget`, `attempt_cap`, `approach`, `open_questions`, `handoff_summary`, `attempt_count`, and authorship attribution on the agent-written ones |
+| D5 operational runs | Task classes: architecture, db_schema, security, cross_cutting, review_gate, merge_gate, frontend, backend, crud, other | An `operational_run` class and the run artifact. The step engine is deferred |
+| D6 role and worker records | Leases carry a free-text `agent_id` string | The role record: role and prompt versions, authority profile version, harness binding, execution identity, escalation and idempotency state, handoff state. Role-level lease and cap enforcement, which needs V2 fixed first |
+| D7 pool daemon | Nothing | The daemon, attempt records, worker-owned heartbeat identity, supervisor heartbeat, fence-checked writes, reconciliation, idempotent launch, substrate adapters |
+| D8 attestation floor | `ArtifactModel` accepts agent-supplied `commit_sha`, `check_suite_ref`, and `check_status`; `integrated` requires non-self review with evidence refs | The evaluator, the trusted runner, protected required-check configuration, the attestation record, and making `implemented` conditional on it. Fixes V1 |
+| D9 orchestrator plans only | Non-self-review enforcement on `integrated`; gate rules and gate decisions | The orchestrator role itself and the review role agent |
+| D10 sandboxes push, humans merge | Branch protection is a forge setting, in place | Scoped push-and-PR credentials, delivery through the Slicer proxy secret mechanism, egress allow rules derived from the permission set |
+| D11 the brief | Web console with a graph and dashboard; metrics endpoints | `tascade brief`, its cursor state, the five sections, drift detection. External-source joins staged one at a time. Graph view deferred to slice 3. Needs V4 for the roadmap section |
+| D12 join contract | Nothing. Herdr 0.8.2 provides the reporting verbs (§4 A1) | The tuple written at launch, the metadata mirror, the display-mapping rule, drift and stale-record reporting |
+| D13 relationship to artifacts | ADRs, runbooks, and `.remember/` all exist | Retiring the diary once the brief exists |
+| D14 how remote agents appear | Nothing | Pool-side reporting for Slicer; per-substrate capability declarations. The in-VM Herdr server is contingent on assumptions A4 and A8 |
+| D15 Herdr across machines | Herdr 0.8.2 installed, single server | Nothing to build; this decision constrains the others. Confirm A4 and A5 on a 0.9 install before relying on the sidebar |
+| D16 three server tiers | One shared dev server, run by hand from a worktree; in-process test clients used by the suite | Per-task server and port allocation as task-scoped resources; the idempotent dev refresh action with health check and rollback; the served-SHA observation |
+
+**The first implementation milestone is V1 through V4, not features.** Committed
+artifact provenance and an enforced fence are the invariants every later slice
+assumes. Building the daemon on top of a fence that never advances and a
+transition that checks nothing would produce automation whose failures are
+undetectable, which is the outcome constraint 1 exists to prevent.
+
+## 6. Adversarial review: findings and disposition
+
+This document was reviewed on 2026-09-08 by a different model (codex,
+gpt-5.6-terra) asked to argue against it. It produced eleven findings and
+declined to merge. The findings are recorded here with their disposition so that
+a later reader can see what was contested and why the document reads as it now
+does. Accepting a finding did not mean deleting a decision; every accepted
+finding amended one.
+
+| # | Finding | Disposition | Reason |
+|---|---|---|---|
+| 1 | D1 rejects a git-backed store without proving a service is needed | **Rejected**, with the alternative recorded | Correct that eight workers do not defeat git and that the original text proved no requirement git could not meet. The decision stands on topology and the trust boundary, and the alternative's own remedy for atomic claims is unspecified. Argued in full in D1, including what would reverse it |
+| 2 | D8's done floor is cheatable | **Accepted** | "CI green on a worker-controlled branch" proves nothing about the resolved head SHA. D8 is now an attestation the evaluator computes and records |
+| 3 | D7's pool heartbeat manufactures liveness | **Accepted** | The pool heartbeating for a worker it cannot inspect contradicted D8's use of expiry as death. Heartbeats are now split, and the four reconciliation cases the finding named are specified |
+| 4 | D6's thin record is insufficient and internally inconsistent | **Accepted** | The record already carried execution control while durable role state went to harness memory. Split now drawn by durability; worker identity moved to the attempt record |
+| 5 | D12, D14, D15 describe incompatible joins | **Accepted** | Three different contracts, and names are per-server and cleared on exit. One tuple now, stated once in D12 |
+| 6 | D14's cloud baseline does not follow from a Slicer mechanism | **Accepted** | Attaching a host pane needs a local terminal into the VM. Cloud is observe-only until an adapter is tested; capabilities are declared per substrate |
+| 7 | Herdr 0.9, Cloud, and Slicer claims are presented as settled | **Accepted** | §4 records ten assumptions with source, date, exercised-or-read, and a probe. Slice 1 depends on none of the unexercised ones |
+| 8 | D5 builds a workflow engine before it is needed | **Deferred** | The hard cases were unspecified and the release relation was wrong. At the current agent count a run task plus an immutable artifact answers the questions being asked. Promoted only when recurring runs show a query markdown cannot answer |
+| 9 | D11's two derived views conceal an integration platform | **Deferred** | The graph view moves to slice 3 and the brief ships local-only, adding external sources one at a time with visible failures. The fields should be proven by use before a second medium repeats them |
+| 10 | D16 infers server freshness from task state | **Accepted** | Refresh is now an explicit idempotent action with target SHA, health check, and rollback; freshness is observed from the running process. The conflicting authentication line is removed |
+| 11 | The document treats proposal scope as existing fact | **Accepted** | §5 is the correction, per decision, including the four verified defects, and it makes the invariants the first milestone rather than the first feature |
+
+Two of the reviewer's supporting claims were checked and are not quite right,
+and are corrected rather than adopted: the agent-name rule in the installed
+0.8.2 binary is `[a-z][a-z0-9_-]{0,31}` and names are additionally *cleared when
+the agent exits*, which is a stronger argument against name-as-identity than the
+one offered; and authentication is opt-out in code (`TASCADE_AUTH_DISABLED`)
+rather than off by default, though it is set to disabled in `.env.example`, in
+the README, and on the dogfood server, so the practical effect is as the finding
+described.
+
 ## 7. Sequencing
 
 The risk that applies to this effort is the one that stalled Tascade
@@ -809,27 +903,47 @@ previously: if the first useful slice requires the daemon and the graph view,
 nothing is useful until everything is built. The first slice is therefore the
 one that makes a live session legible, seeded with real work.
 
+**Slice 0: invariants.** Added on review (§5, §6 finding 11). Automation built
+on a fence that never advances and a transition that checks nothing produces
+failures nobody can see. This is small and it comes first.
+
+1. Enforce the fence: advance it on re-claim, require it on every state and
+   evidence write (V2).
+2. Expire leases: a sweep that marks them expired, releases them, and re-queues
+   the task (V3). Fix the lease release on the `claimed -> in_progress`
+   transition while here.
+3. Require commit-backed artifact provenance on `in_progress -> implemented`
+   (V1), which is the enforcement point D8's attestation later plugs into.
+4. Turn authentication on for the dogfood server and every tier (D1).
+
 **Slice 1: legible session**
 
-1. CLI over the existing REST API.
-2. Thin Agent table and the task fields in D4.
-3. Herdr naming convention, applied by hand to running panes.
-4. The brief.
-5. Seed with the work in flight on the day of writing: the deploy as an
-   operational run, version tracking as a task, the quality-gate work as a
+5. CLI over the existing REST API.
+6. Role and attempt records, and the task fields in D4.
+7. The join tuple of D12, applied by hand to running panes.
+8. The brief, local-only.
+9. Seed with the work in flight on the day of writing: the deploy as a run task
+   with a run artifact, version tracking as a task, the quality-gate work as a
    task.
 
 **Slice 2: factory**
 
-6. Pool daemon with the local Herdr substrate.
-7. Done-condition evaluation and retry policy.
-8. Slicer substrate.
-9. Bug-fix orchestrator as a role agent.
+10. Pool daemon with the local Herdr substrate, including attempt records and
+    reconciliation.
+11. The done-condition evaluator, the trusted runner, and the retry policy.
+12. Slicer substrate.
+13. Bug-fix orchestrator as a role agent.
 
 **Slice 3: picture**
 
-10. Graph view in the dashboard.
-11. Cloud substrate.
+14. Graph view in the dashboard.
+15. Cloud substrate, observe-only.
+16. Milestone activity state (V4), replacing the brief's inferred roadmap line.
+
+Deferred with no slice until a trigger fires: the operational-run step engine
+(D5), which waits on recurring runs producing a query markdown cannot answer,
+and the brief's external-source joins (D11), which are added one source at a
+time as the brief proves which fields are load-bearing.
 
 The backlog in `docs/BACKLOG.md` carries the item-level detail.
 
