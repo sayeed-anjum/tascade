@@ -124,3 +124,47 @@ class TestSkillFlag:
         for command in COMMANDS:
             invocation = " ".join(("tascade", *command.path))
             assert invocation in text, f"docs/cli-skill.md does not document: {invocation}"
+
+
+class TestBooleanAndListEncoding:
+    """Flags whose sense or shape differs from a plain repeated string."""
+
+    def test_exclude_completed_turns_the_graph_filter_off(self):
+        from app.cli.main import _split_arguments
+
+        command = find_command(("projects", "graph"))
+        parser = build_parser()
+        namespace = parser.parse_args(["projects", "graph", "p1", "--exclude-completed"])
+        _, query, _ = _split_arguments(command, namespace)
+        assert query["include_completed"] is False
+
+    def test_graph_filter_is_absent_when_the_flag_is_not_given(self):
+        from app.cli.main import _split_arguments
+
+        command = find_command(("projects", "graph"))
+        namespace = build_parser().parse_args(["projects", "graph", "p1"])
+        _, query, _ = _split_arguments(command, namespace)
+        assert "include_completed" not in query
+
+    def test_inactive_flag_creates_a_disabled_rule(self):
+        from app.cli.main import _split_arguments
+
+        command = find_command(("gates", "rule-create"))
+        namespace = build_parser().parse_args(
+            ["gates", "rule-create", "--project-id", "p", "--name", "n", "--inactive"]
+        )
+        _, _, body = _split_arguments(command, namespace)
+        assert body["is_active"] is False
+
+    def test_repeated_capabilities_are_sent_as_one_comma_delimited_value(self):
+        from app.cli.main import _split_arguments
+
+        command = find_command(("tasks", "ready"))
+        namespace = build_parser().parse_args(
+            [
+                "tasks", "ready", "--project-id", "p", "--agent-id", "a",
+                "--capability", "python", "--capability", "go",
+            ]
+        )
+        _, query, _ = _split_arguments(command, namespace)
+        assert query["capabilities"] == "python,go"

@@ -12,12 +12,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-# Argument kinds. "json" parses the value as a JSON document; "list" is repeatable.
+# Argument kinds.
+#   json      parses the value as a JSON document
+#   list      repeatable, sent as repeated parameters
+#   csv       repeatable, sent as one comma-delimited value
+#   bool      a flag that sets the value True
+#   bool_off  a flag that sets the value False, for turning a server default off
 KIND_STR = "str"
 KIND_INT = "int"
 KIND_BOOL = "bool"
+KIND_BOOL_OFF = "bool_off"
 KIND_JSON = "json"
 KIND_LIST = "list"
+KIND_CSV = "csv"
 
 # Where an argument travels: in the URL template, the query string, or the body.
 LOC_PATH = "path"
@@ -33,7 +40,6 @@ class Arg:
     help: str = ""
     kind: str = KIND_STR
     location: str = LOC_BODY
-    default: object = None
 
 
 @dataclass(frozen=True)
@@ -98,12 +104,11 @@ COMMANDS: tuple[Command, ...] = (
         args=(
             _path("project_id", "Project id."),
             Arg(
-                name="--include-completed",
+                name="--exclude-completed",
                 dest="include_completed",
-                help="Include completed tasks.",
-                kind=KIND_BOOL,
+                help="Hide completed tasks; they are included by default.",
+                kind=KIND_BOOL_OFF,
                 location=LOC_QUERY,
-                default=True,
             ),
         ),
         mcp_tool="get_project_graph",
@@ -122,7 +127,6 @@ COMMANDS: tuple[Command, ...] = (
                 dest="sequence",
                 help="Ordering within the project; starts at 0.",
                 kind=KIND_INT,
-                default=0,
             ),
         ),
         mcp_tool="create_phase",
@@ -141,7 +145,6 @@ COMMANDS: tuple[Command, ...] = (
                 dest="sequence",
                 help="Ordering within the project; starts at 0.",
                 kind=KIND_INT,
-                default=0,
             ),
         ),
         mcp_tool="create_milestone",
@@ -263,7 +266,7 @@ COMMANDS: tuple[Command, ...] = (
                 name="--capability",
                 dest="capabilities",
                 help="Capability you offer; repeatable.",
-                kind=KIND_LIST,
+                kind=KIND_CSV,
                 location=LOC_QUERY,
             ),
         ),
@@ -533,9 +536,8 @@ COMMANDS: tuple[Command, ...] = (
             Arg(
                 name="--inactive",
                 dest="is_active",
-                help="Create the rule disabled.",
-                kind=KIND_BOOL,
-                default=True,
+                help="Create the rule disabled; rules are active by default.",
+                kind=KIND_BOOL_OFF,
             ),
         ),
         mcp_tool="create_gate_rule",

@@ -140,7 +140,7 @@ Mirrors MCP `list_projects`.
 
 `tascade projects graph <project_id>` — Get the full project graph: phases, milestones, tasks, dependencies.
 
-- `--include-completed` *(flag)* — Include completed tasks.
+- `--exclude-completed` *(flag)* — Hide completed tasks; they are included by default.
 
 Mirrors MCP `get_project_graph`.
 
@@ -322,7 +322,7 @@ Mirrors MCP `create_dependency`.
 - `--conditions` — JSON conditions object.
 - `--required-evidence` — JSON evidence requirements.
 - `--required-reviewer-role` *(repeatable)* — Reviewer role; repeatable.
-- `--inactive` *(flag)* — Create the rule disabled.
+- `--inactive` *(flag)* — Create the rule disabled; rules are active by default.
 
 Mirrors MCP `create_gate_rule`.
 

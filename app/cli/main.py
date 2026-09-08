@@ -16,6 +16,8 @@ from app.cli.client import ApiClient, ApiError, TransportError
 from app.cli.commands import (
     COMMANDS,
     KIND_BOOL,
+    KIND_BOOL_OFF,
+    KIND_CSV,
     KIND_INT,
     KIND_JSON,
     KIND_LIST,
@@ -52,7 +54,11 @@ def _add_argument(parser: argparse.ArgumentParser, arg: Arg) -> None:
         kwargs.pop("required")
         parser.add_argument(arg.name, action="store_true", default=None, **kwargs)
         return
-    if arg.kind == KIND_LIST:
+    if arg.kind == KIND_BOOL_OFF:
+        kwargs.pop("required")
+        parser.add_argument(arg.name, action="store_false", default=None, **kwargs)
+        return
+    if arg.kind in (KIND_LIST, KIND_CSV):
         parser.add_argument(arg.name, action="append", default=None, **kwargs)
         return
     if arg.kind == KIND_INT:
@@ -114,6 +120,8 @@ def _value_for(arg: Arg, namespace: argparse.Namespace) -> Any:
         return None
     if arg.kind == KIND_JSON:
         return json.loads(value)
+    if arg.kind == KIND_CSV:
+        return ",".join(value)
     return value
 
 
@@ -134,16 +142,14 @@ def _split_arguments(command: Command, namespace: argparse.Namespace) -> tuple[s
             body[arg.dest] = value
 
     url = command.url.format(**path_values)
-    return url, query, (body if command.method != "GET" else {})
+    return url, query, ({} if command.method == "GET" else body)
 
 
 def run(command: Command, namespace: argparse.Namespace, transport=None) -> int:
     config = load_config(url=namespace.url, api_key=namespace.api_key)
     client = ApiClient(config, transport=transport)
     url, query, body = _split_arguments(command, namespace)
-    result = client.request(
-        command.method, url, query=query, body=body if command.method != "GET" else None
-    )
+    result = client.request(command.method, url, query=query, body=body or None)
     print(json.dumps(result, indent=2, default=str) if namespace.json else render(result))
     return EXIT_OK
 
