@@ -59,8 +59,10 @@ read at the start of several real sessions.
 7. The brief (D11)
 - `tascade brief [--since <ts>]` printing the five sections in order, all
   derived: needs-a-human, running, landed, roadmap, decided.
-- Joins Herdr via `herdr agent list --json` and Slicer via `slicer vm list`
-  where available; degrades cleanly when neither is present.
+- Joins Herdr via `herdr agent list --json` run per machine over SSH, tagging
+  each record by machine, and Slicer via `slicer vm list`; degrades cleanly
+  when neither is present. Join key is the Tascade lease id in the Herdr
+  agent session field, not the agent name (D15).
 - Acceptance: run against the seeded session, the brief lists every live agent
   with its task and flags every unnamed pane.
 
@@ -76,7 +78,9 @@ read at the start of several real sessions.
 ## Slice 2: factory
 
 9. Pool daemon, local substrate (D7)
-- One process per host. Poll ready tasks by capability tag and subproject cap,
+- One process per host, because only a local process can drive that host's
+  Herdr socket (D15). Poll ready tasks by capability tag, host or substrate
+  constraint, and subproject cap,
   claim, create worktree via `herdr worktree create`, launch via
   `herdr agent start`, prompt from the task's template, heartbeat on the
   worker's behalf, run after-run hooks on exit.

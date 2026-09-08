@@ -355,6 +355,48 @@ Headless workers with no attached pane are permitted for cloud substrates. They
 appear only in the brief and the graph view. That is acceptable because the
 brief, not Herdr, is the primary answer to "what is running".
 
+### D15. Herdr across machines is a viewing layer, not a control layer
+
+Verified against the installed binary (0.8.2), the 0.9 documentation, and the
+"Connecting the machines" announcement.
+
+- Each machine runs its own Herdr server with its own sessions and processes.
+  Named sessions are additional servers on the same machine.
+- Herdr 0.9 lets one client window show saved SSH machines side by side, with
+  agents from every connected machine in the sidebar. This is the human's
+  unified view.
+- The socket API and the `herdr` CLI remain single-server. Workspace, tab,
+  pane ids, and agent names are scoped to one server; two machines may both
+  hold `w1:p1` or an agent named `reviewer`. The announcement states the agent
+  CLI "doesn't yet see the agents running on your other machines" and that
+  cross-machine CLI is intended for a later release. Herdr Cloud, a connection
+  layer, and moving agent sessions between machines are also stated as future
+  work.
+- A cloud session or an ephemeral VM has no Herdr server at all unless one is
+  deliberately installed and attached over SSH.
+
+Consequences for this design, all of which reinforce earlier decisions:
+
+1. Tascade heartbeat is the only cross-machine liveness signal. Herdr is an
+   overlay per machine. (D1)
+2. The brief gathers Herdr state per machine over SSH and tags each record
+   with its machine. The join key is the Tascade lease id carried in the
+   Herdr agent session field, never the bare agent name. (D11, D12)
+3. The pool daemon is per host for a second reason: it is the only process
+   that can drive that host's Herdr socket. An orchestrator on one machine
+   cannot open a pane on another; it creates a task with a host or substrate
+   constraint and that host's daemon acts. (D7, D9)
+4. Role agents that a human expects to address by name through Herdr must
+   run on a machine that human attaches to, or be addressed through Tascade
+   open questions instead. This is a real limitation and is stated here so it
+   is not rediscovered.
+5. When Herdr ships a cross-machine agent CLI, the per-machine SSH gathering
+   in the brief collapses to one call, and nothing else changes. The design
+   does not depend on that shipping.
+
+Upgrading to Herdr 0.9 is recommended for the multi-machine sidebar. It does
+not change any control-plane decision.
+
 ## 4. Sequencing
 
 The risk that applies to this effort is the one that stalled Tascade
