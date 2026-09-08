@@ -5,8 +5,8 @@ Dependency-aware task orchestration for multi-agent software execution.
 Tascade is a coordination substrate that lets multiple AI agents (or humans)
 work on the same codebase in parallel without stepping on each other.
 It enforces execution-safe invariants — cycle-free dependencies, lease-based
-claiming, gate-controlled integration — through a REST API and an
-MCP server that any LLM-based agent can call directly.
+claiming, gate-controlled integration — through a REST API and a
+`tascade` command-line client that any LLM-based agent can drive.
 
 ## Why Tascade
 
@@ -137,47 +137,36 @@ curl "http://localhost:8010/v1/tasks/ready?project_id=<PROJECT_ID>&agent_id=agen
 See [docs/api/README.md](docs/api/README.md) for the full endpoint reference
 and [docs/api/openapi-v0.1.yaml](docs/api/openapi-v0.1.yaml) for the OpenAPI spec.
 
-### MCP server (32 tools)
+### `tascade` CLI
 
-The MCP (Model Context Protocol) server lets AI agents call Tascade directly.
-Use the self-locating launcher:
+The CLI is the agent interface (see decision D2 in
+[docs/design/2026-09-08-control-plane-for-herdr-agents.md](docs/design/2026-09-08-control-plane-for-herdr-agents.md)).
+It is a thin client over the REST API — it stores nothing locally, works
+identically under every agent harness, and costs no per-turn context until an
+agent actually reaches for it.
 
 ```bash
-./mcp-server.sh
+pip install -e .
+
+# Endpoint and key: --url/--api-key, TASCADE_URL/TASCADE_API_KEY, or
+# ~/.config/tascade/config.toml.
+export TASCADE_URL=http://localhost:8010
+
+tascade projects list --json
+tascade tasks ready --project-id "$PROJECT" --agent-id agent-1 --json
+tascade tasks claim "$TASK" --project-id "$PROJECT" --agent-id agent-1 --json
 ```
 
-**Agent configuration (Claude Code):**
+Every subcommand takes `--json`, which prints the raw API response and nothing
+else. Point an agent at the full skill file with `tascade --skill`, or read it
+at [docs/cli-skill.md](docs/cli-skill.md).
 
-```json
-{
-  "mcpServers": {
-    "tascade": {
-      "command": "/path/to/tascade/mcp-server.sh"
-    }
-  }
-}
-```
+Coverage is enforced: `tests/test_cli_commands.py` fails if a route registered
+on the FastAPI app has neither a subcommand nor a documented exemption in
+`ROUTE_EXEMPTIONS`, so the two surfaces cannot drift.
 
-<details>
-<summary>Full MCP tool list (32 tools)</summary>
-
-**Project management:** `create_project`, `get_project`, `list_projects`, `create_phase`, `create_milestone`
-
-**Task execution:** `create_task`, `get_task`, `list_tasks`, `list_ready_tasks`, `claim_task`, `heartbeat_task`, `assign_task`, `transition_task_state`, `create_task_artifact`, `list_task_artifacts`, `get_task_context`
-
-**Dependencies:** `create_dependency`, `get_project_graph`
-
-**Integration:** `enqueue_integration_attempt`, `update_integration_attempt_result`, `list_integration_attempts`
-
-**Planning:** `create_plan_changeset`, `apply_plan_changeset`
-
-**Gates:** `create_gate_rule`, `create_gate_decision`, `list_gate_decisions`, `evaluate_gate_policies`
-
-**Metrics:** `get_metrics_summary`, `get_metrics_trends`, `get_metrics_alerts`
-
-**Documentation:** `get_instructions`
-
-</details>
+The MCP server that previously served this role was removed once the CLI reached
+parity; see open question 4 in the design document.
 
 ### Web dashboard
 
@@ -261,8 +250,8 @@ app/
   schemas.py        # Pydantic request/response schemas
   auth.py           # API key auth + role enforcement
   db.py             # Database connection + migration runner
-  mcp_tools.py      # MCP tool handlers (32 tools)
-  mcp_server.py     # MCP stdio server
+  instructions.py   # Protocol guide served by GET /v1/instructions
+  cli/              # `tascade` thin client (command table, parser, renderer)
   metrics/          # Metrics computation (materializer, alerts, forecast, actions)
 docs/
   PRD.md            # Product requirements
@@ -291,6 +280,7 @@ scripts/            # Utilities (API key creation, smoke tests, benchmarks)
 | [docs/api/README.md](docs/api/README.md) | REST API reference |
 | [docs/api/openapi-v0.1.yaml](docs/api/openapi-v0.1.yaml) | OpenAPI 3.1 specification |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | Outstanding work items |
+| [docs/cli-skill.md](docs/cli-skill.md) | `tascade` CLI skill file and command reference |
 | [AGENTS.md](AGENTS.md) | Agent workflow guide (dogfooding SOP) |
 
 ## CI/CD
@@ -298,8 +288,7 @@ scripts/            # Utilities (API key creation, smoke tests, benchmarks)
 GitHub Actions runs on every PR and push to `main`:
 
 1. **Unit tests** — full pytest suite against SQLite
-2. **PostgreSQL E2E** — migrations + smoke tests against PostgreSQL 16
-3. **MCP smoke test** — validates MCP server starts and tools respond
+2. **PostgreSQL E2E** — migrations + API smoke test against PostgreSQL 16
 
 ## Contributing
 

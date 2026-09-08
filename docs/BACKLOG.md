@@ -17,7 +17,8 @@ read at the start of several real sessions.
 - Subcommands mirror the existing REST surface: projects, tasks, ready, claim,
   heartbeat, transition, artifacts, dependencies, graph, context.
 - Ship a skill file agents can read, in the same spirit as `herdr --skill`.
-- Acceptance: every MCP tool has a CLI equivalent with a parity test.
+- Acceptance: every REST route has a CLI equivalent with a parity test, or a
+  documented exemption.
 
 2. Subprojects (D3)
 - Add subproject as an optional level under project with its own short-id
@@ -157,6 +158,12 @@ These remain valid and fold into slice 1 item 1.
 
 ## Retired
 
-- MCP-first workflow in `AGENTS.md`. To be rewritten once the CLI lands.
+- MCP server (2026-09-08, task `P1.M1.T13`). Closes open question 4 in the
+  design document: removed rather than kept for compatibility, once the CLI
+  reached parity. `app/mcp_server.py`, `app/mcp_tools.py`, `mcp-server.sh`,
+  their tests, the Postgres MCP smoke test and the `mcp` dependency are gone.
+  The CLI coverage guarantee now reads REST routes instead of the tool list.
+- MCP-first workflow in `AGENTS.md`. Rewritten as the CLI-first workflow
+  (2026-09-08, task `P1.M1.T13`).
 - Legacy alias endpoints and `unassign`: de-scoped unless a CLI consumer
   needs them.

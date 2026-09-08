@@ -5,7 +5,7 @@
 Tascade is a coordinator for dependency-aware, multi-agent software execution. It provides:
 
 - REST APIs for project/task orchestration
-- MCP tools for agent-native workflows
+- A `tascade` CLI for agent-native workflows
 - a read-first web console for visibility
 - policy-driven gates and auditable review transitions
 
@@ -42,7 +42,7 @@ Standard task trackers do not enforce execution-safe invariants needed by parall
 
 ## Success Criteria (Current)
 
-- Core API and MCP workflows are test-covered and pass (`pytest`).
+- Core API and CLI workflows are test-covered and pass (`pytest`).
 - Web read console and metrics dashboard are test-covered and pass (`vitest`).
 - Integration to `integrated` state requires reviewer identity and evidence, with self-review blocked.
 - Auth enforces API key validity, role scope, and project scope.

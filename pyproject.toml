@@ -23,7 +23,9 @@ tascade = "app.cli.main:main"
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0.0",
-  "mcp>=1.13.0",
+  # Required by starlette.testclient. It used to arrive transitively through
+  # the mcp package; declare it now that mcp is gone.
+  "httpx>=0.28.0",
 ]
 
 [tool.setuptools.packages.find]

@@ -95,7 +95,7 @@ def health() -> dict[str, str]:
 
 @app.get("/v1/instructions", response_model=InstructionsResponse)
 def get_instructions() -> InstructionsResponse:
-    """The Tascade protocol guide, mirroring the MCP ``get_instructions`` tool.
+    """The Tascade protocol guide, as printed by ``tascade instructions``.
 
     Unauthenticated like ``/health`` so an agent can read the protocol before it
     has a key.

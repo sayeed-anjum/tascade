@@ -122,28 +122,20 @@ Read the server's own protocol guide at any time with `tascade instructions`.
 
 Every command below also accepts `--json`, `--url`, and `--api-key`.
 
+
 ### `projects`
 
 `tascade projects create` — Create a project.
 
 - `--name` **(required)** — Project name.
 
-Mirrors MCP `create_project`.
-
 `tascade projects get <project_id>` — Get a project by id.
 
-
-Mirrors MCP `get_project`.
-
 `tascade projects list` — List all projects.
-
-Mirrors MCP `list_projects`.
 
 `tascade projects graph <project_id>` — Get the full project graph: phases, milestones, tasks, dependencies.
 
 - `--exclude-completed` *(flag)* — Hide completed tasks; they are included by default.
-
-Mirrors MCP `get_project_graph`.
 
 
 ### `phases`
@@ -154,8 +146,6 @@ Mirrors MCP `get_project_graph`.
 - `--name` **(required)** — Phase name.
 - `--sequence` — Ordering within the project; starts at 0.
 
-Mirrors MCP `create_phase`.
-
 
 ### `milestones`
 
@@ -165,8 +155,6 @@ Mirrors MCP `create_phase`.
 - `--phase-id` **(required)** — Parent phase id.
 - `--name` **(required)** — Milestone name.
 - `--sequence` — Ordering within the project; starts at 0.
-
-Mirrors MCP `create_milestone`.
 
 
 ### `tasks`
@@ -186,12 +174,7 @@ Mirrors MCP `create_milestone`.
 - `--exclusive-path` *(repeatable)* — Path only this task may touch; repeatable.
 - `--shared-path` *(repeatable)* — Path shared with other tasks; repeatable.
 
-Mirrors MCP `create_task`.
-
 `tascade tasks get <task_id>` — Get a task by id or short id.
-
-
-Mirrors MCP `get_task`.
 
 `tascade tasks list` — List tasks in a project, optionally filtered.
 
@@ -202,15 +185,11 @@ Mirrors MCP `get_task`.
 - `--limit` — Page size. Default 50.
 - `--offset` — Page offset.
 
-Mirrors MCP `list_tasks`.
-
 `tascade tasks ready` — List tasks ready for this agent to claim.
 
 - `--project-id` **(required)** — Project id.
 - `--agent-id` **(required)** — Your agent id.
 - `--capability` *(repeatable)* — Capability you offer; repeatable.
-
-Mirrors MCP `list_ready_tasks`.
 
 `tascade tasks claim <task_id>` — Claim a ready task and take its lease.
 
@@ -219,8 +198,6 @@ Mirrors MCP `list_ready_tasks`.
 - `--claim-mode` — pull|directed. Default pull.
 - `--seen-plan-version` — Plan version you last read; rejects a stale claim.
 
-Mirrors MCP `claim_task`.
-
 `tascade tasks heartbeat <task_id>` — Renew the lease on a claimed task.
 
 - `--project-id` **(required)** — Project id.
@@ -228,16 +205,12 @@ Mirrors MCP `claim_task`.
 - `--lease-token` **(required)** — Lease token returned by claim.
 - `--seen-plan-version` — Plan version you last read.
 
-Mirrors MCP `heartbeat_task`.
-
 `tascade tasks assign <task_id>` — Reserve a task for a named agent (push model).
 
 - `--project-id` **(required)** — Project id.
 - `--assignee-agent-id` **(required)** — Agent the task is reserved for.
 - `--created-by` **(required)** — Who is assigning.
 - `--ttl-seconds` — Reservation lifetime. Default 1800.
-
-Mirrors MCP `assign_task`.
 
 `tascade tasks state <task_id>` — Transition a task to a new state.
 
@@ -249,15 +222,11 @@ Mirrors MCP `assign_task`.
 - `--review-evidence-ref` *(repeatable)* — Evidence reference; repeatable.
 - `--force` *(flag)* — Bypass transition guards.
 
-Mirrors MCP `transition_task_state`.
-
 `tascade tasks context <task_id>` — Get a task with its dependency ancestors and dependents.
 
 - `--project-id` **(required)** — Project id.
 - `--ancestor-depth` — Traversal depth upstream. Default 1.
 - `--dependent-depth` — Traversal depth downstream. Default 1.
-
-Mirrors MCP `get_task_context`.
 
 `tascade tasks artifacts-create <task_id>` — Record a branch, commit, and check status for a task.
 
@@ -269,13 +238,9 @@ Mirrors MCP `get_task_context`.
 - `--check-status` — pending|passed|failed.
 - `--touched-file` *(repeatable)* — File the task touched; repeatable.
 
-Mirrors MCP `create_task_artifact`.
-
 `tascade tasks artifacts-list <task_id>` — List artifacts recorded for a task.
 
 - `--project-id` **(required)** — Project id.
-
-Mirrors MCP `list_task_artifacts`.
 
 `tascade tasks integrations-enqueue <task_id>` — Enqueue an integration attempt for a task.
 
@@ -284,21 +249,15 @@ Mirrors MCP `list_task_artifacts`.
 - `--head-sha` — Head commit SHA.
 - `--diagnostics` — JSON diagnostics object.
 
-Mirrors MCP `enqueue_integration_attempt`.
-
 `tascade tasks integrations-list <task_id>` — List integration attempts for a task.
 
 - `--project-id` **(required)** — Project id.
-
-Mirrors MCP `list_integration_attempts`.
 
 `tascade tasks integrations-result <attempt_id>` — Record the outcome of an integration attempt.
 
 - `--project-id` **(required)** — Project id.
 - `--result` **(required)** — success|conflict|failed_checks.
 - `--diagnostics` — JSON diagnostics object.
-
-Mirrors MCP `update_integration_attempt_result`.
 
 
 ### `deps`
@@ -309,8 +268,6 @@ Mirrors MCP `update_integration_attempt_result`.
 - `--from-task-id` **(required)** — The task that must finish first.
 - `--to-task-id` **(required)** — The task that is unblocked.
 - `--unlock-on` **(required)** — implemented|integrated.
-
-Mirrors MCP `create_dependency`.
 
 
 ### `gates`
@@ -325,8 +282,6 @@ Mirrors MCP `create_dependency`.
 - `--required-reviewer-role` *(repeatable)* — Reviewer role; repeatable.
 - `--inactive` *(flag)* — Create the rule disabled; rules are active by default.
 
-Mirrors MCP `create_gate_rule`.
-
 `tascade gates decision-create` — Record a gate decision.
 
 - `--project-id` **(required)** — Project id.
@@ -338,15 +293,11 @@ Mirrors MCP `create_gate_rule`.
 - `--reason` **(required)** — Why.
 - `--evidence-ref` *(repeatable)* — Evidence reference; repeatable.
 
-Mirrors MCP `create_gate_decision`.
-
 `tascade gates decisions-list` — List gate decisions for a project.
 
 - `--project-id` **(required)** — Project id.
 - `--task-id` — Filter by task.
 - `--phase-id` — Filter by phase.
-
-Mirrors MCP `list_gate_decisions`.
 
 `tascade gates evaluate` — Evaluate gate policies for a project.
 
@@ -354,9 +305,7 @@ Mirrors MCP `list_gate_decisions`.
 - `--actor-id` **(required)** — Who is evaluating.
 - `--policy` — JSON policy overrides.
 
-Mirrors MCP `evaluate_gate_policies`.
-
-`tascade gates checkpoints` — List gate checkpoints. REST only; no MCP equivalent.
+`tascade gates checkpoints` — List gate checkpoints.
 
 - `--project-id` **(required)** — Project id.
 - `--gate-type` — review_gate|merge_gate.
@@ -365,8 +314,6 @@ Mirrors MCP `evaluate_gate_policies`.
 - `--include-completed` *(flag)* — Include completed checkpoints.
 - `--limit` — Page size.
 - `--offset` — Page offset.
-
-REST only; no MCP equivalent.
 
 
 ### `plans`
@@ -379,18 +326,10 @@ REST only; no MCP equivalent.
 - `--operations` **(required)** — JSON list: [{"op": "update_task", "task_id": "...", "payload": {...}}]
 - `--created-by` **(required)** — Author id.
 
-Mirrors MCP `create_plan_changeset`.
-
 `tascade plans changeset-apply <changeset_id>` — Apply a plan changeset.
 
 - `--allow-rebase` *(flag)* — Rebase automatically on a version conflict.
 
-Mirrors MCP `apply_plan_changeset`.
-
-
 ### Top level
 
 `tascade instructions` — Print the Tascade protocol guide from the server.
-
-Mirrors MCP `get_instructions`.
-

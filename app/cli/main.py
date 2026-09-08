@@ -1,7 +1,7 @@
 """``tascade`` command-line entry point.
 
 Argparse is built from the declarative table in :mod:`app.cli.commands`, so the
-CLI surface and the MCP parity test share one source of truth.
+CLI surface and the REST-route parity test share one source of truth.
 """
 
 from __future__ import annotations

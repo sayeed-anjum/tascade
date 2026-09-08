@@ -475,7 +475,7 @@ class GraphTask(BaseModel):
 
     Uses ``dict`` for ``work_spec`` so that enriched fields such as
     ``candidate_readiness`` are preserved in the response, matching the
-    MCP ``get_project_graph`` output shape.
+    Project graph output shape.
     """
 
     id: str

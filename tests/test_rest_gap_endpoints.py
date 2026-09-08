@@ -1,4 +1,4 @@
-"""REST endpoints added so the thin CLI can reach every MCP tool (P1.M1.T1)."""
+"""REST endpoints added so the thin CLI can reach the whole surface (P1.M1.T1)."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -210,10 +210,10 @@ class TestInstructions:
         assert response.status_code == 200
         assert "Tascade" in response.json()["instructions"]
 
-    def test_matches_the_mcp_tool_text(self, client: TestClient):
-        from app import mcp_tools
+    def test_serves_the_shared_instructions_constant(self, client: TestClient):
+        from app.instructions import INSTRUCTIONS
 
-        assert response_text(client) == mcp_tools.get_instructions()
+        assert response_text(client) == INSTRUCTIONS
 
 
 def response_text(client: TestClient) -> str:

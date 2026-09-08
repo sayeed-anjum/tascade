@@ -1,7 +1,7 @@
 """The Tascade protocol guide.
 
-Shared by the MCP ``get_instructions`` tool and the ``GET /v1/instructions``
-endpoint so the two cannot drift.
+Served by ``GET /v1/instructions`` and printed by ``tascade instructions``,
+which reads it from the server, so the two cannot drift.
 """
 
 from __future__ import annotations
@@ -97,7 +97,7 @@ Before transitioning to implemented, publish artifacts:
 
 Use short_id as primary identifier: P3.M1.T6
 First mention may include UUID: P3.M1.T6 (58d380b4-...)
-UUID required for MCP tool parameters.
+UUID required for API and CLI parameters.
 
 ## 7. Work Traceability
 

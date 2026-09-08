@@ -61,15 +61,18 @@ cd web
 npm run test
 ```
 
-## MCP Server
+## Agent CLI
 
-Start with self-locating script:
+Install the console script and point it at the server:
 
 ```bash
-./mcp-server.sh
+pip install -e .
+export TASCADE_URL=http://localhost:8010
+tascade projects list --json
 ```
 
-MCP details: `docs/api/README.md`
+Command reference and the agent skill file: `docs/cli-skill.md`, also printable
+with `tascade --skill`.
 
 ## Task Lifecycle (Canonical)
 

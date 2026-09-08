@@ -5,17 +5,16 @@
 - API service (`app/main.py`): REST endpoints and static asset serving.
 - Store layer (`app/store.py`): orchestration invariants and DB transactions.
 - Auth layer (`app/auth.py`): API key auth, role checks, project-scope enforcement.
-- MCP server (`app/mcp_server.py` + `app/mcp_tools.py`): agent tool interface.
+- CLI client (`app/cli/*`): the `tascade` agent interface, a thin HTTP client over the REST API.
 - Metrics engine (`app/metrics_jobs.py`, `app/metrics/*`): compute and read model.
 - Web UI (`web/src/*`): read-only operations console and metrics dashboards.
 
 ```mermaid
 flowchart LR
-  A["Planner / Agent / Reviewer"] --> B["REST API (FastAPI)"]
-  A --> C["MCP Server (stdio)"]
-  C --> D["MCP Tools"]
-  D --> E["Store Layer"]
-  B --> E
+  A["Planner / Agent / Reviewer"] --> C["tascade CLI"]
+  A --> B["REST API (FastAPI)"]
+  C --> B
+  B --> E["Store Layer"]
   E --> F["Postgres / SQLite"]
   E --> G["Event Log"]
   E --> H["Metrics Read Model"]
@@ -76,4 +75,5 @@ Notes:
 - Task detail panel
 - Metrics dashboard
 
-All writes remain API/MCP-driven; the web UI is a read-first console.
+All writes remain API-driven, whether direct or through the CLI; the web UI
+is a read-first console.

@@ -4,7 +4,7 @@
 
 - Backend: FastAPI + SQLAlchemy
 - DB: PostgreSQL (default) or SQLite (dev/test)
-- Agent interface: MCP stdio server
+- Agent interface: `tascade` CLI over the REST API
 - Frontend: React + Vite (served from backend when built)
 
 ## Core Domain Model

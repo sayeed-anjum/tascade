@@ -1,11 +1,13 @@
 """The declarative command table.
 
 This table is the single source of truth for the CLI surface: ``main`` builds
-argparse from it, and the parity test walks it against ``MCP_TOOL_NAMES``. A new
-MCP tool cannot land without a matching entry here.
+argparse from it, and the parity test walks it against the routes registered on
+the FastAPI app. A new REST route cannot land without either a matching entry
+here or an entry in ``ROUTE_EXEMPTIONS``.
 
-``mcp_tool`` names the MCP tool a command mirrors, or ``None`` for commands that
-exist only in the CLI because the REST API offers them and MCP does not.
+``mcp_tool`` records which tool of the retired MCP server a command grew out of.
+It is provenance only: nothing reads it at runtime, and the MCP server no longer
+exists.
 """
 
 from __future__ import annotations
@@ -607,7 +609,7 @@ COMMANDS: tuple[Command, ...] = (
         path=("gates", "checkpoints"),
         method="GET",
         url="/v1/gates/checkpoints",
-        help="List gate checkpoints. REST only; no MCP equivalent.",
+        help="List gate checkpoints.",
         args=(
             _project_query(),
             Arg(
@@ -704,6 +706,44 @@ COMMANDS: tuple[Command, ...] = (
         mcp_tool="get_instructions",
     ),
 )
+
+
+# REST routes that deliberately have no CLI command, each with the reason it is
+# excluded. The parity test fails both ways: a route that is neither covered nor
+# listed here, and an entry here that no longer names a real route. Adding a
+# route to this list is a decision to be argued for in review, not a way to make
+# a failing test pass.
+_METRICS_REASON = (
+    "Metrics feed the read-first web console (docs/ARCHITECTURE.md). They are "
+    "aggregates over work an agent has already reported, so no agent loop in "
+    "docs/cli-skill.md reaches for them."
+)
+
+ROUTE_EXEMPTIONS: dict[tuple[str, str], str] = {
+    ("GET", "/health"): (
+        "Liveness probe for deployment tooling. It carries no task state, and "
+        "`curl` is the right client for it."
+    ),
+    ("POST", "/v1/api-keys"): (
+        "API key issuance is an operator action performed on the server host "
+        "with scripts/create_api_key.py. A client that needs a key to call the "
+        "endpoint that mints keys is of no use to an agent bootstrapping one."
+    ),
+    ("GET", "/v1/api-keys"): (
+        "Key administration, as above: operator surface, not agent surface."
+    ),
+    ("POST", "/v1/api-keys/{key_id}/revoke"): (
+        "Key administration, as above: operator surface, not agent surface."
+    ),
+    ("GET", "/v1/metrics/summary"): _METRICS_REASON,
+    ("GET", "/v1/metrics/trends"): _METRICS_REASON,
+    ("GET", "/v1/metrics/breakdown"): _METRICS_REASON,
+    ("GET", "/v1/metrics/drilldown"): _METRICS_REASON,
+    ("GET", "/v1/metrics/health"): _METRICS_REASON,
+    ("GET", "/v1/metrics/actions"): _METRICS_REASON,
+    ("GET", "/v1/metrics/alerts"): _METRICS_REASON,
+    ("POST", "/v1/metrics/alerts/{alert_id}/acknowledge"): _METRICS_REASON,
+}
 
 
 _BY_PATH = {command.path: command for command in COMMANDS}
