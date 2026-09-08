@@ -161,7 +161,7 @@ between two run tasks.
 Almost everything the operator does is expected to be a task of one class or
 another. This is the intended default, not an exception path.
 
-### D6. Agents are roles or workers; the Agent record is thin
+### D6. Agents are roles or workers; the durable record is small but authoritative
 
 **Role agents** have a durable identity: a name, a skill set, a permission set,
 memory, and a concurrency cap. A deploy agent is a role with a cap of one,
@@ -170,19 +170,47 @@ PR-review agent, and similar are roles. A role outlives any session; a session
 is one instance of a role and its context is disposable when its unit of work
 completes.
 
-**Workers** are anonymous. They have no identity beyond the task they hold.
-They receive a full spec, a workspace, and a branch, and end when the PR is
-open. Their lease identity is harness plus session id, which is sufficient
-because nothing about them persists.
+**Workers** are anonymous in the sense that nothing about their personality
+persists. They receive a full spec, a workspace, and a branch, and end when the
+pull request is open. They are not anonymous to the system: a worker is
+identified by its attempt record (D7), which namespaces it by host, substrate,
+and attempt. An earlier draft made worker lease identity "harness plus session
+id", which has no host or substrate namespace and is vulnerable to session-id
+reuse across machines; that is replaced by the attempt identity.
 
-**The Agent record in Tascade is thin:** name, concurrency cap, permission
-set, and a harness binding that names which harness runs the role and where
-its skill lives. Memory is owned by the harness. A role that needs its own
-dedicated harness instance gets one. Tascade never stores agent memory and
-never sees it.
+**What Tascade persists, and what it does not.** An earlier draft called the
+Agent record "thin" and then listed permissions, concurrency, harness binding,
+command, skill path, prompt template, and hooks - already a substantial
+execution-control record - while handing role memory, prompt provenance,
+authority grants, and run continuity to unspecified harness memory. A role that
+was recreated or moved could then not be audited or safely resumed. The split is
+therefore drawn by durability rather than by size:
 
-The role's concurrency cap is enforced as a lease on the role itself, using
-the same fencing mechanism the task lease already uses, one level up.
+*Persisted by Tascade, because a moved or recreated role must be auditable and
+resumable:*
+
+| Field | Why it must be durable |
+|---|---|
+| Role name and immutable role version | Identifies which definition acted. Versions are append-only; editing a role mints a new version. |
+| Prompt template version | The reviewer of a bad outcome needs the prompt that produced it, not the current one. |
+| Authority profile version | Which permission set and which credential scope were in force at the time. |
+| Harness binding | Harness id, command, skill path, hooks. Determines where and how it runs. |
+| Concurrency cap and current role lease | Enforcement, see below. |
+| Execution identity | Host, substrate, machine id, attempt id, task and lease UUID with fence (D12). |
+| Escalation and idempotency state | Which irreversible actions this role has already taken, so a resumed instance does not repeat them. |
+| Resumable handoff state | Enough to hand the unit of work to a fresh instance: current task, position, and open questions. |
+
+*Owned by the harness and never stored or read by Tascade:* the conversation
+itself, retrieved context, scratch reasoning, and any model-side memory. That
+material is large, harness-specific, and not evidence. The rule is that harness
+memory may hold a role's recollections but must never be the only durable record
+of a role's decisions.
+
+The role's concurrency cap is enforced as a lease on the role itself, using the
+same fencing mechanism as the task lease, one level up. That mechanism must
+first be made real: fences are created at 1 and never advanced today, and no
+write path requires one (§5). A role cap enforced by a fence that never moves is
+not enforcement.
 
 ### D7. Workers pull from a daemon; the loop is deterministic
 
@@ -378,24 +406,78 @@ nodes filled with the holding agent and heartbeat age, blocked nodes marked
 with the reason, milestone boundaries as swimlanes. Selecting a node shows
 intent, done condition, PR, and handoff summary.
 
-### D12. Herdr and Slicer state joins Tascade by naming, not replication
+### D12. Herdr and Slicer state joins Tascade by identity, never by name
 
 Tascade is the source of truth for what is being worked on. Herdr is the source
 of truth for what is alive on a given machine. A Slicer daemon is the source of
 truth for what is alive in its VMs. None writes another's state.
 
-The join is a naming discipline: a Herdr pane running task work is named by
-the task short id, a Slicer VM carries the task short id as a metadata tag.
-Herdr agent names must be lowercase and may contain only letters, digits,
-dashes, and underscores, so the short id is mapped by lowercasing and
-replacing dots with dashes: `P1.M1.T1` becomes `p1-m1-t1`. The mapping is
-one-to-one and reversible; the worktree path and label keep the original
-form. The lease id goes in the pane's display metadata until the agent
-session field can carry it without fighting the harness hook, which sets
-that field to the harness's own session id.
-The pool daemon applies this automatically at launch. Role agents apply it at
-claim time. Drift in either direction is then detectable and is reported by
-the brief.
+**One join contract, used identically in D14 and D15:**
+
+```
+(tascade_task_uuid, tascade_lease_uuid, fence, machine_id, herdr_server_id)
+```
+
+The lease UUID and fence identify the attempt; a task UUID alone does not say
+which retry or which host owns the work. The machine id and Herdr server id are
+required because pane ids and agent names are scoped to a single server, and
+two machines may each hold a pane `w1:p1` or an agent named `reviewer` (D15).
+Every record gathered from a machine is tagged with both before it is compared
+to anything.
+
+Earlier drafts of this document carried three incompatible joins: short-id
+naming here, "the Herdr session id is the lease id" in D14, and "the join key is
+never the name but the session field" in D15. Those were materially different
+contracts. The tuple above is now the only one, and D14 and D15 have been
+amended to match rather than restate it.
+
+**Where the tuple is written.**
+
+- Herdr: `herdr pane report-agent-session --agent-session-id`, serialised as
+  `task:<uuid>/lease:<uuid>/fence:<n>`. The pool also writes the same string to
+  a `report-metadata` token under the reserved key `tascade`, because the
+  harness lifecycle hook contends for the session field and sets it to the
+  harness's own session id. The reader takes the metadata token first and the
+  session field second. Both channels are verified present in the installed
+  0.8.2 binary; the contention between hook and pool for the session field is
+  observed, not designed, and the metadata token is the workaround.
+- Slicer: the same string as a VM metadata tag, alongside the human-readable
+  task short id.
+
+**Names and short ids are display labels and nothing else.** No reader may
+recover identity from them.
+
+Verified against the installed Herdr 0.8.2 binary on 2026-09-08, its agent
+command help states: names must match `[a-z][a-z0-9_-]{0,31}`, must be unique
+among live agents on that server, and are cleared when the agent exits, is
+released, or is replaced. Each of those three facts independently disqualifies
+the name as a join key: it is not durable across an agent exit, it is not unique
+across machines, and thirty-two characters without dots cannot carry a
+subproject-prefixed short id plus an attempt number.
+
+The display-mapping rule, applied by the pool at launch and by role agents at
+claim time:
+
+1. Lowercase the short id and replace dots with dashes: `P1.M1.T1` becomes
+   `p1-m1-t1`.
+2. If two live agents on one server would collide - a retry launched while the
+   previous attempt's pane is still closing - suffix `-a<attempt>`.
+3. If the result exceeds thirty-two characters, drop leading path components
+   (subproject, then phase) until it fits; if it still does not fit, use the
+   first eight characters of the lease UUID prefixed with `t-`.
+4. The worktree path, the pane label, and the `report-metadata` title keep the
+   original short id in its readable form.
+
+A rename the server rejects is recorded as drift and is never retried into some
+other task's name. Drift in either direction is reported by the brief.
+
+**Stale and unjoined records.** A Herdr or Slicer record whose tuple names a
+lease Tascade does not know, or knows as released, is stale: it is reported as
+drift and is never used to infer task state. A Tascade attempt with no matching
+record on its machine is drift in the other direction. A record with no tuple at
+all - an agent a human started by hand, or a hook that won the session field
+before the pool wrote the token - is listed as unjoined. The brief never guesses
+a join from a name.
 
 ### D13. Relationship to existing artifacts
 
@@ -487,10 +569,12 @@ Layout conventions, applied by the pool:
   labeled by task short id. Ephemeral panes close when the task leaves
   `in_progress`.
 - Role agents keep their own tab, named by role, regardless of substrate.
-- The Herdr agent session id is set to the Tascade lease id, so the join from
-  a pane to a task needs no name parsing.
-- Display-only fields (task title, substrate, host) go through
-  `herdr pane report-metadata`.
+- The join tuple of D12 - task UUID, lease UUID, fence, machine id, Herdr
+  server id - is written to the agent session field and mirrored into a
+  `report-metadata` token. The pane label carries the short id for the human
+  and is never parsed by a reader.
+- Other display-only fields (task title, substrate, host) go through
+  `herdr pane report-metadata` as well.
 
 Headless workers with no attached pane are permitted for cloud substrates. They
 appear only in the brief and the graph view. That is acceptable because the
@@ -521,8 +605,10 @@ Consequences for this design, all of which reinforce earlier decisions:
 1. Tascade heartbeat is the only cross-machine liveness signal. Herdr is an
    overlay per machine. (D1)
 2. The brief gathers Herdr state per machine over SSH and tags each record
-   with its machine. The join key is the Tascade lease id carried in the
-   Herdr agent session field, never the bare agent name. (D11, D12)
+   with its machine id and the Herdr server id it came from. The join key is
+   the D12 tuple, carried in the agent session field and mirrored in a
+   metadata token; never the bare agent name, which is per-server, non-unique
+   across machines, and cleared when the agent exits. (D11, D12)
 3. The pool daemon is per host for a second reason: it is the only process
    that can drive that host's Herdr socket. An orchestrator on one machine
    cannot open a pane on another; it creates a task with a host or substrate
