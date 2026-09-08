@@ -71,13 +71,81 @@ projects and a single dependency graph across machines.
 Consequences:
 
 - SQLite-in-the-repo is not the deployment shape. PostgreSQL remains the target.
-- Authentication is always on. The existing project-scoped API keys are the
-  mechanism. Each machine holds an endpoint and a key in local config,
-  alongside Herdr's own config.
+- Authentication is always on. Project-scoped API keys exist and work today,
+  but local development ships with `TASCADE_AUTH_DISABLED=1` in `.env.example`
+  and the README, and the dogfood server currently runs that way. "Always on"
+  is therefore a change to make, not a property to rely on: it is the first
+  item of the migration in §5.
 - Liveness comes from the Tascade lease heartbeat first. Herdr and Slicer
   provide richer liveness where they apply, as overlays, never as the primary
   signal. A cloud session is in no Herdr pane, so nothing load-bearing may
   depend on Herdr.
+
+**Alternative considered and rejected: a git-backed coordination repository.**
+Beads is the working example (§9), and the case for it is strong enough that it
+must be recorded rather than dismissed. The shape: a dedicated private
+coordination repository holding the issue DAG as files, a tiny CLI over
+`git fetch` and `git push`, protected refs and pull requests for anything that
+needs review, and ref compare-and-swap for claims.
+
+What it genuinely wins:
+
+- No always-on service. No PostgreSQL instance, no endpoint discovery, no key
+  distribution, no schema migrations, and no service recovery path. Every one of
+  those is a real operational cost this design is now committed to.
+- Offline reads, complete history, replication, and backup as properties of the
+  storage rather than as things to build.
+- Review and access control that already exist and that the operator already
+  understands.
+- Cloud and sandbox workers need git credentials anyway to push branches, so the
+  coordination store adds no new credential type.
+- At eight workers there is no measured contention, availability, or
+  cross-repository query requirement that git demonstrably cannot meet. The
+  original text rejected git without establishing one, which was a real gap.
+
+Why it was not chosen anyway:
+
+1. **Topology.** The control plane is deliberately colocated with the Herdr
+   server, on the operator's own network, because that is where the fleet is. A
+   git remote reaches the forge; it does not reach the fleet. The state that
+   must be read at low latency and written continuously - leases, worker
+   heartbeats, attempt records, fences - is fleet state, and a Slicer egress
+   proxy can allow one named internal host far more narrowly than it can allow a
+   forge that every worker must also be able to push to.
+2. **Trust boundary.** D10 gives a sandboxed worker a credential scoped to push
+   non-protected branches and open pull requests, and nothing more. If the
+   coordination store is a git repository, then every worker that can record its
+   own progress can also rewrite the task graph, other agents' claims, and its
+   own done condition. Splitting that into a second repository with a second
+   credential recreates the key distribution the alternative was meant to avoid,
+   and a pull request per state transition is not a control loop.
+3. **Claims and fences.** The alternative's own remedy - "optionally backed by
+   atomic ref/PR-based claims" - is unspecified, and it is the part that
+   matters. A ref compare-and-swap is genuinely atomic, so this is not
+   impossible; but a lease with a TTL, a heartbeat, and a fence that must
+   advance monotonically on every re-claim (D7) is a distributed-systems
+   component built on top of ref CAS, not a CLI over `git push`. The cost that
+   was avoided at the storage layer reappears at the protocol layer.
+4. **Liveness churn.** Worker heartbeats at a thirty-second interval across
+   eight workers are on the order of a thousand writes an hour whose only
+   purpose is to say "still here". As commits that is history no one wants and
+   must later prune; kept out of git it becomes a second store, and the brief
+   then joins two stores instead of reading one.
+5. **What already exists.** The REST API, the store, the state machine, the
+   review gates, and the metrics jobs are built and running. Moving to a
+   git-backed store is a rewrite justified by operational simplicity, not a
+   simplification of work already done.
+
+The honest summary is that the objection was right about scale and wrong about
+the reason. Eight workers do not defeat git. The decision rests on topology and
+on the trust boundary, and it costs the offline and backup properties listed
+above, which are met instead by PostgreSQL backups, the existing append-only
+event log, and API keys with role scopes.
+
+**What would reverse this.** If the fleet turns out to be reachable only through
+the forge, or if operating the service proves to cost more attention than the
+coordination it buys, the git-backed store is the fallback and this decision
+should be revisited rather than defended.
 
 ### D2. The agent interface is a CLI, not MCP
 
@@ -151,15 +219,29 @@ backlog-to-integrated lifecycle. It is a sequence of steps whose individual
 outcomes matter. The repository's runbook-authoring standard already requires
 each step to be tagged executed, predicted, or assumed.
 
-A task of class `operational_run` carries an ordered step list. Each step has
-its own status and an evidence pointer. A deploy skill writes its derived
-changelog into the step list at plan time and advances steps as it executes.
-The deploy record becomes a queryable object rather than a dated markdown file,
-and "what shipped between two deploys" becomes a query over tasks integrated
-between two run tasks.
+**Deferred, on review.** An ordered mutable step list with per-step state and
+evidence, derived changelogs, and its own lifecycle is a second workflow engine
+inside the tracker, and it was specified before any of its hard cases were:
+a partially completed deploy, a rollback, a resumed run, a repeated release, and
+a failed-but-reconciled run each need semantics this document did not give them.
+"What shipped between two deploys" was also stated as a query over tasks
+integrated between two run tasks, which is not a release relation and is simply
+wrong whenever merge order and deployment order differ.
 
-Almost everything the operator does is expected to be a task of one class or
-another. This is the intended default, not an exception path.
+**What slice 1 does instead.** An operational run is a normal task with:
+
+- an immutable run artifact recording what was executed, in the repository's
+  existing runbook form with each step tagged executed, predicted, or assumed;
+- explicit release and commit references, so "what shipped" is answered from the
+  deployed SHA and the commits it contains rather than inferred from task order;
+- the ordinary task lifecycle and nothing else.
+
+Structured steps are promoted to a first-class object only after several
+recurring runs have produced questions that a markdown runbook plus artifacts
+demonstrably cannot answer. Backlog item 4 records the deferral and the trigger.
+
+Almost everything the operator does is still expected to be a task of one class
+or another. That part stands; only the step engine is deferred.
 
 ### D6. Agents are roles or workers; the durable record is small but authoritative
 
@@ -386,7 +468,9 @@ inside shape applies.
 ### D11. Two views, both derived
 
 **The brief** is a terminal command for a returning human, built entirely from
-derived state. It prints, in this order:
+derived state. Slice 1 ships it local-only: everything below that comes from
+Tascade and from git in the local checkouts, and nothing else. It prints, in
+this order:
 
 1. What needs a human: blocked tasks with reasons, tasks past attempt cap, PRs
    awaiting merge, open questions written by agents.
@@ -399,12 +483,28 @@ derived state. It prints, in this order:
    next ready tasks.
 5. What was decided: ADRs added or superseded since the timestamp, from git.
 
-**The graph view** lives in the Tascade web dashboard. It is a neighborhood
-view centered on work in progress, not the whole project graph: boxes in a
-left-to-right dependency flow, done nodes grey, ready nodes outlined, claimed
-nodes filled with the holding agent and heartbeat age, blocked nodes marked
-with the reason, milestone boundaries as swimlanes. Selecting a node shows
-intent, done condition, PR, and handoff summary.
+Sections 2 and 4 depend on things that do not exist yet and must degrade
+visibly rather than quietly. Per-machine Herdr and Slicer gathering over SSH
+needs saved cursor state, host discovery, credentials, adapters, deduplication,
+and an authoritative answer when two sources disagree; every one of those is a
+place for drift, and at eight agents the questions people actually ask are not
+yet known. So: external sources are added one at a time, each one's failure is
+printed as a named failure line rather than an omission, and the brief is
+correct with none of them present. "Active milestone" is not derivable at all
+today - `MilestoneModel` has no active or status field (§5) - so slice 1 prints
+the milestone containing the next ready tasks and labels it as inferred.
+
+**The graph view is deferred to slice 3, on review.** It repeats most of the
+brief's joins in a second medium, and the console already has a graph and
+dashboard. Building it before the brief has been read at the start of several
+real sessions would fix the fields and joins before anyone knows which ones are
+load-bearing. When it is built it is a neighborhood view centered on work in
+progress, not the whole project graph: boxes in a left-to-right dependency flow,
+done nodes grey, ready nodes outlined, claimed nodes filled with the holding
+agent and heartbeat age, blocked nodes marked with the reason, milestone
+boundaries as swimlanes, and a node detail panel showing intent, done condition,
+pull request, and handoff summary. It reuses the brief's fields; it does not
+define its own.
 
 ### D12. Herdr and Slicer state joins Tascade by identity, never by name
 
@@ -517,12 +617,25 @@ Consequences:
 - Port allocation is a task-scoped resource the pool assigns, alongside the
   worktree and branch. It belongs in the task's derived state so the brief can
   show it and a stale server can be found.
-- "Ticket close rebuilds dev" is an integration-time hook, not a deploy: pull
-  `dev`, install, restart the server process in its pane. It runs after the
-  `integrated` transition (D8), which makes the transition the trigger for
-  every downstream refresh rather than a bookkeeping step.
-- The dev server is the natural place to enable authentication first, since it
-  is the one agents share.
+- "Ticket close rebuilds dev" is an explicit operational action, not an
+  inference from task state. An earlier draft made the `integrated` transition
+  the trigger for every downstream refresh; that is wrong, because if the merge
+  succeeds and the refresh fails, Tascade reports the task as integrated while
+  dogfooding runs stale code, and a rollback of the code does not restore the
+  server. The refresh is instead a named, idempotent action with its own record:
+  target SHA, health check after restart, retry policy, and rollback to the
+  previously serving SHA on failure. It is idempotent on the target SHA, so two
+  tasks integrating at once converge on one refresh to the later `dev` head
+  rather than racing.
+- Server freshness is therefore an observation, never a derivation. The brief
+  reports the SHA the dev server is actually serving, read from the running
+  process, next to the current `dev` head. If they differ the brief says so.
+  "Integrated" says a merge happened; it does not say anything ran.
+- Authentication is enabled everywhere, dev server included (D1). An earlier
+  draft called the dev server "the natural place to enable authentication
+  first", which contradicts D1's always-on posture and would have left the one
+  server agents share as the one with a special case. There is no first place:
+  §5 lists turning auth on as migration work, and it applies to every tier.
 
 ### D14. How VM and remote agents appear in Herdr
 
