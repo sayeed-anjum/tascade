@@ -192,11 +192,58 @@ process per host. It is not an LLM. Its loop:
 1. Poll Tascade for ready tasks, filtered by capability tag and by the
    subproject's concurrency cap.
 2. Claim one and take the lease.
-3. Create an isolated workspace and launch the harness with a prompt template
-   rendered from the task.
-4. Heartbeat on the worker's behalf while it runs.
-5. On exit, run after-run hooks, then evaluate the done condition (D8).
-6. Transition to `implemented`, or re-queue.
+3. Persist an attempt record before launching anything. The attempt carries the
+   task id, the lease id and its fence, the host, the substrate, the workspace
+   path, the branch, and a state of `launching`. Nothing is started until that
+   write has returned.
+4. Create an isolated workspace and launch the harness with a prompt template
+   rendered from the task. The attempt id and a worker-scoped heartbeat
+   credential go into the worker's environment.
+5. The worker heartbeats for itself. The pool reports its own supervisor health
+   separately.
+6. On worker exit, run after-run hooks, then evaluate the done condition (D8).
+7. Transition to `implemented`, or re-queue.
+
+**Liveness has two independent signals and they are not interchangeable.**
+An earlier draft of this decision had the pool heartbeat "on the worker's
+behalf" while D8 treated heartbeat expiry as proof the worker had died. Those
+two statements cannot both hold: a supervisor heartbeating for a process it
+cannot inspect manufactures liveness, and a wedged, disconnected, or
+approval-blocked worker would then look healthy for as long as its daemon
+stayed up. The signals are now separate.
+
+- The **worker heartbeat** is written by the worker process itself under an
+  attempt-scoped identity, `(task id, lease id, fence, attempt id)`. Only the
+  worker can produce it. Its absence means the worker is gone or wedged.
+- The **supervisor heartbeat** is written by the pool for itself, per host. Its
+  absence means that host's daemon is gone. That is a different failure with a
+  different remedy: nothing on that host is being supervised, but the workers it
+  already launched may still be running and still writing.
+
+Blocked-on-a-human is not a liveness failure. A worker waiting on an approval
+prompt keeps heartbeating and sets `open_questions`; the brief separates the
+two (D11).
+
+**Every state and evidence write carries the fence.** A write whose fence is
+below the lease's current fence is rejected, and the fence advances on every
+re-claim. This is what stops a superseded attempt from completing a task that
+has been handed to its successor, and it is what makes the reconciliation below
+safe rather than merely hopeful. Neither property exists today: fences are
+created at 1 and never advanced, and no write path requires one (§5).
+
+**Reconciliation, per crash point.** The pool runs this at start and on every
+poll.
+
+| Observed | Meaning | Action |
+|---|---|---|
+| Lease held, no attempt record | Claimed before launch | Release the lease and return the task to `ready`. No attempt is counted: nothing was started, so nothing can be running. |
+| Attempt in `launching`, no live process, no worker heartbeat | Launched before persisted, or died during launch | Probe the substrate for an orphan carrying the attempt id and kill it if found, then fail the attempt and re-queue with the fence advanced. |
+| Attempt live, supervisor heartbeat stale | Daemon loss | The worker may still be running. On restart the daemon adopts live attempts by attempt id instead of relaunching them; only attempts with no live process and no worker heartbeat are re-queued. A daemon must never re-queue on the strength of its own restart. |
+| Worker heartbeat stale past its TTL, attempt live | Worker loss | Cancel explicitly: signal the process, tear down the workspace, then advance the fence and re-queue. Teardown precedes re-queue so two writers cannot coexist. |
+
+Launch is idempotent on the attempt id. The substrate is asked to start
+`attempt <id>`; asking again for one already running is a no-op, not a second
+process.
 
 The launch step is pluggable across three substrates, chosen per task or
 subproject:
@@ -210,7 +257,8 @@ subproject:
   proxy allow rules enforce the permission set. Ephemeral VMs for workers,
   persistent committed disks for roles.
 - **Cloud session.** Harness-specific remote launch. No local pane, no VM;
-  heartbeat is the only liveness signal.
+  the worker heartbeat is the only liveness signal, and cancellation must be
+  supported by the remote launch API or the substrate is observe-only (D14).
 
 Role agents are not pulled. An orchestrator or a human prompts a role agent by
 name, through Herdr where present. Push for roles, pull for workers.
@@ -218,21 +266,65 @@ name, through Herdr where present. Push for roles, pull for workers.
 This matches the shape the field converged on during 2026: a tracker as the
 control plane, a polling loop that keeps every active item staffed, isolated
 workspace per item, a concurrency cap, restart on stall, hooks after each run.
+The attempt record, the split heartbeats, and the fence are this design's
+additions to that shape, and they exist because "restart on stall" is only safe
+when the system can tell which process stalled.
 
-### D8. Completion has a floor and a retry policy
+### D8. Completion is an attestation the evaluator computes, plus a retry policy
 
-`implemented` requires the done condition to hold, evaluated by the pool from
-outside the worker. A worker cannot declare itself done.
+`implemented` requires an attestation the evaluator produced itself. A worker
+cannot declare itself done, and worker-supplied evidence is an input to the
+evaluation, never proof of it. "Outside the worker" is a boundary only if the
+evaluator independently resolves every fact it relies on.
 
-- **Floor:** continuous integration is green on the pushed branch.
-- **Task-specific checks** may be added by the planner on top of the floor,
-  for example a named test file must exist and pass, or a named artifact must
-  be present.
+**The attestation contract.** The evaluator runs in a trusted runner the worker
+cannot reach, and it:
+
+1. Resolves the repository and pull request from the task record, not from the
+   worker's report.
+2. Resolves the immutable head SHA of that pull request, and the base SHA it
+   merges into, from the forge API. A worker-reported SHA is compared against
+   the resolved one; a mismatch is a failure, not a correction.
+3. Requires a named set of checks read from a protected CI configuration that
+   the branch under test cannot modify. A check defined in the branch under test
+   does not count toward the requirement.
+4. Verifies check provenance. Each required check must be reported against the
+   resolved head SHA, by the expected app or runner identity, and must not be
+   stale relative to that SHA.
+5. Runs task-specific checks itself, from an allowlist, in the trusted runner,
+   against a fresh checkout of the resolved SHA.
+6. Records the attestation: evaluated head SHA, base SHA, required check names
+   and conclusions, task-check commands and their outputs, evaluator identity,
+   and timestamp.
+
+The `in_progress -> implemented` transition takes the attestation id and is
+refused without one. The attestation is immutable and is the artifact a
+reviewer reads first.
+
+**What this replaces, and why.** The earlier floor was "continuous integration
+is green on the pushed branch". That is cheatable and was wrong: it proves only
+that some run passed for some branch state the worker controlled. A worker
+could push a further commit after the green run, alter the CI configuration
+inside its own branch, target a different repository or pull request, rely on a
+stale check, or satisfy a named-file check without doing the work the task
+asked for. "CI green" survives as one clause inside the attestation, bound to a
+SHA the evaluator resolved rather than one the worker named.
+
+**Human review remains a separate gate.** The attestation is a floor on
+mechanical completion; it says nothing about whether the work was the right
+work. `integrated` still requires a reviewer who is not the worker (D9). The
+store already enforces non-self review with evidence references on that
+transition, which is the one piece of this floor that exists today.
 
 Retry policy:
 
-- Heartbeat expiry releases the lease and returns the task to `ready` with the
-  attempt count incremented. The next attempt runs with fresh context.
+- Worker-heartbeat expiry, not supervisor-heartbeat expiry (D7), cancels the
+  attempt, tears down the workspace, advances the fence, and returns the task
+  to `ready` with the attempt count incremented. The next attempt runs with
+  fresh context.
+- A failed attestation is an attempt outcome rather than a crash. It re-queues
+  with the attestation attached, so the next attempt can read why the last one
+  failed instead of rediscovering it.
 - Reaching `attempt_cap` moves the task to `blocked` with a reason.
 
 Fresh context per attempt is what makes retry safe. The attempt cap is what
