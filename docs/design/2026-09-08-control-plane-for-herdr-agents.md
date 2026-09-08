@@ -985,8 +985,10 @@ default.
    and exits.
 3. **Cross-subproject edges and ADRs.** Whether Tascade should require a
    linked ADR on a cross-subproject dependency edge or merely surface it.
-4. **Legacy MCP server.** Whether it is kept for compatibility or removed once
-   the CLI covers the surface.
+4. ~~Legacy MCP server.~~ **Resolved 2026-09-08: removed.** The CLI
+   reached full parity with the MCP tool surface, and keeping both meant every
+   schema change was made twice. Removal is task `P1.M1.T13`, which also pins
+   dependencies after an unpinned `mcp` major release broke the build.
 
 ## 9. What the field says, and how it was folded in
 
