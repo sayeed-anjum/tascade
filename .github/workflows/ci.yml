@@ -82,5 +82,10 @@ jobs:
       - name: Run API smoke test against PostgreSQL
         env:
           TASCADE_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/tascade_smoke
+          # This job checks that the API flow works when PostgreSQL is the
+          # backing store, not that auth works. Auth is covered by tests/
+          # test_auth.py and tests/test_auth_endpoint_registration.py in the
+          # unit job, which disables it the same way (tests/conftest.py).
+          TASCADE_AUTH_DISABLED: "1"
         run: |
           python scripts/postgres_smoke.py

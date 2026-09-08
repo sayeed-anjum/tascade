@@ -30,12 +30,36 @@ def main() -> None:
     assert project.status_code == 201, project.text
     project_id = project.json()["id"]
 
+    # A task needs a milestone, which needs a phase: that chain is what
+    # generates the short id. The server started enforcing it while this job
+    # was skipped behind the failing unit-test job.
+    phase = client.post(
+        "/v1/phases",
+        json={"project_id": project_id, "name": "smoke", "sequence": 0},
+    )
+    assert phase.status_code == 201, phase.text
+
+    milestone = client.post(
+        "/v1/milestones",
+        json={
+            "project_id": project_id,
+            "phase_id": phase.json()["id"],
+            "name": "smoke",
+            "sequence": 0,
+        },
+    )
+    assert milestone.status_code == 201, milestone.text
+
     task = client.post(
         "/v1/tasks",
         json={
             "project_id": project_id,
+            "milestone_id": milestone.json()["id"],
             "title": "postgres smoke task",
             "task_class": "backend",
+            # The ready query below filters on capabilities, which are tags on
+            # the task, not its class. Without this the filter excludes it.
+            "capability_tags": ["backend"],
             "work_spec": {
                 "objective": "Smoke-check API flow on PostgreSQL",
                 "acceptance_criteria": ["Task can be created and claimed"],
@@ -59,6 +83,7 @@ def main() -> None:
         json={"project_id": project_id, "agent_id": "ci-agent"},
     )
     assert claim.status_code == 200, claim.text
+    assert task.json()["short_id"], "short id generation is what the chain above is for"
 
     print("PostgreSQL smoke test passed")
 
