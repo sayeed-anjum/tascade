@@ -134,6 +134,10 @@ read at the start of several real sessions.
 
 These remain valid and fold into slice 1 item 1.
 
+- Phase and milestone creation over REST: `POST /v1/phases` and
+  `POST /v1/milestones`. Found while seeding on 2026-09-08: task creation
+  requires a milestone for short-id generation, but only the MCP tools can
+  create one.
 - REST task context endpoint: `GET /v1/tasks/{task_id}/context` with
   `ancestor_depth` and `dependent_depth`, parity with the existing MCP tool.
 - Execution snapshot retrieval: `GET /v1/tasks/{task_id}/execution-snapshots`.

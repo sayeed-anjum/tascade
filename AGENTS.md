@@ -3,8 +3,10 @@
 ## Active Project
 
 - Use this Tascade project ID by default for all planning/execution in this repo:
-  - `66b79018-c5e0-4880-864e-e2462be613d2`
+  - `5466813d-f2ac-4159-bb94-bd9acf477e06`
+  - Re-seeded 2026-09-08 on the `postgres` container database `tascade`; the earlier project id no longer exists.
 - Project name: `tascade`
+- Local API for dogfooding: `http://127.0.0.1:8010` (run from the `tascade-orchestration` worktree; see `docs/BACKLOG.md`)
 
 ## Role Scope
 
