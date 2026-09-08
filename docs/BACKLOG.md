@@ -84,6 +84,8 @@ read at the start of several real sessions.
   claim, create worktree via `herdr worktree create`, launch via
   `herdr agent start`, prompt from the task's template, heartbeat on the
   worker's behalf, run after-run hooks on exit.
+- Subscribe to Herdr lifecycle events before taking the initial snapshot;
+  from 0.9 subscriptions start live and do not replay history.
 - Acceptance: a task created with a local substrate is picked up, worked, and
   reaches `implemented` with no human action.
 
@@ -104,9 +106,11 @@ read at the start of several real sessions.
 - Acceptance: a task with the Slicer substrate produces a PR from inside the
   VM and appears in `herdr agent list` with correct status.
 
-12. Verify socket forwarding into a Slicer VM (D14)
-- Try a reverse-forwarded Herdr socket plus environment so the harness hook
-  reports natively. Record the result either way in the design doc.
+12. Herdr server inside the Slicer golden image (D14)
+- Bake the Herdr server and harness hooks into the image; the pool runs
+  `herdr machine add` for each launched VM and removes it on teardown.
+- Acceptance: a VM-hosted worker appears in the combined sidebar with native
+  lifecycle states, and disappears cleanly when the VM is destroyed.
 
 13. Bug-fix orchestrator as a role agent (D9)
 - Reads GitHub issues, creates a milestone and tasks with dependency edges,

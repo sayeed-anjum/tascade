@@ -334,11 +334,18 @@ because the pane is attached, `herdr agent read` and `herdr agent prompt` work
 through it. This mechanism works for any substrate, cloud included, because
 the only input is Tascade.
 
-**Upgrade for Slicer: forward the socket into the VM.** Every Slicer VM has
-SSH. A reverse-forwarded Unix socket plus the three environment variables
-Herdr's hooks expect would let the harness's own hook report natively, with
-the same fidelity as a local pane. This is worth verifying on a real VM before
-it is relied on; it is an upgrade, not a requirement.
+**Upgrade for Slicer: Herdr inside the VM, connected as a machine.** Herdr's
+stated direction is that any sandbox, VM, or remote server runs its own Herdr
+server and connects to the operator's other machines; Herdr 0.9 does this
+over SSH with `herdr machine add`, and Herdr Cloud is announced as the
+follow-on that removes the reachability requirement. Every Slicer VM ships
+with SSH, so this works today: bake the Herdr server and the harness hook
+into the golden image, and have the pool add each launched VM as a machine.
+The harness hook then reports natively to the in-VM server, and the operator's
+window shows the VM's agents in the combined sidebar with full fidelity. This
+is preferred over forwarding the host socket into the VM. It is an upgrade to
+the human view only: the agent CLI remains single-server (D15), so control
+still flows through Tascade and the per-host daemon.
 
 Layout conventions, applied by the pool:
 
