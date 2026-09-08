@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=68,<90"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,13 +8,19 @@ version = "0.1.0"
 description = "Minimal vertical-slice coordinator for agentic task orchestration."
 readme = "README.md"
 requires-python = ">=3.12"
+# Every requirement carries an upper bound. `mcp>=1.13.0` had none, upstream
+# shipped 2.x, and CI installed a release that renamed the class the server
+# imported. The bound is the next major (the next calendar year for aiofiles,
+# which is CalVer), so a compatible release still floats in and a major has to
+# be adopted deliberately. tests/test_dependency_pinning.py enforces the rule
+# for anything added later.
 dependencies = [
-  "fastapi>=0.116.0",
-  "pydantic>=2.11.0",
-  "sqlalchemy>=2.0.0",
-  "psycopg[binary]>=3.2.0",
-  "uvicorn>=0.35.0",
-  "aiofiles>=24.0.0",
+  "fastapi>=0.116.0,<1.0",
+  "pydantic>=2.11.0,<3.0",
+  "sqlalchemy>=2.0.0,<3.0",
+  "psycopg[binary]>=3.2.0,<4.0",
+  "uvicorn>=0.35.0,<1.0",
+  "aiofiles>=24.0.0,<26.0",
 ]
 
 [project.scripts]
@@ -22,10 +28,12 @@ tascade = "app.cli.main:main"
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=8.0.0",
+  "pytest>=8.0.0,<10.0",
   # Required by starlette.testclient. It used to arrive transitively through
   # the mcp package; declare it now that mcp is gone.
-  "httpx>=0.28.0",
+  "httpx>=0.28.0,<1.0",
+  # Used by tests/test_dependency_pinning.py to parse these requirements.
+  "packaging>=24.0,<27.0",
 ]
 
 [tool.setuptools.packages.find]
