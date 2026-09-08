@@ -354,7 +354,12 @@ COMMANDS: tuple[Command, ...] = (
                 help="Target state, for example in_progress or implemented.",
             ),
             Arg(name="--actor-id", dest="actor_id", required=True, help="Who is transitioning."),
-            Arg(name="--reason", dest="reason", help="Why. Carries the handoff summary."),
+            Arg(
+                name="--reason",
+                dest="reason",
+                required=True,
+                help="Why. Carries the handoff summary on the implemented transition.",
+            ),
             Arg(name="--reviewed-by", dest="reviewed_by", help="Reviewer id, for integration."),
             Arg(
                 name="--review-evidence-ref",
@@ -465,7 +470,7 @@ COMMANDS: tuple[Command, ...] = (
                 name="--result",
                 dest="result",
                 required=True,
-                help="success|conflict|failure.",
+                help="success|conflict|failed_checks.",
             ),
             Arg(
                 name="--diagnostics",
@@ -549,7 +554,12 @@ COMMANDS: tuple[Command, ...] = (
         help="Record a gate decision.",
         args=(
             _project_body(),
-            Arg(name="--gate-rule-id", dest="gate_rule_id", help="Rule this decides."),
+            Arg(
+                name="--gate-rule-id",
+                dest="gate_rule_id",
+                required=True,
+                help="Rule this decides.",
+            ),
             Arg(name="--task-id", dest="task_id", help="Task the decision applies to."),
             Arg(name="--phase-id", dest="phase_id", help="Phase the decision applies to."),
             Arg(
@@ -558,8 +568,8 @@ COMMANDS: tuple[Command, ...] = (
                 required=True,
                 help="approved|approved_with_risk|rejected.",
             ),
-            Arg(name="--decided-by", dest="decided_by", required=True, help="Reviewer id."),
-            Arg(name="--rationale", dest="rationale", help="Why."),
+            Arg(name="--actor-id", dest="actor_id", required=True, help="Reviewer id."),
+            Arg(name="--reason", dest="reason", required=True, help="Why."),
             Arg(
                 name="--evidence-ref",
                 dest="evidence_refs",

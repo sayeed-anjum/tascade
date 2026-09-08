@@ -89,7 +89,14 @@ class ApiClient:
             pruned = {k: v for k, v in body.items() if v is not None}
             payload = json.dumps(pruned).encode("utf-8")
 
-        status, raw = self._transport(method, url, headers, payload)
+        try:
+            status, raw = self._transport(method, url, headers, payload)
+        except TransportError:
+            raise
+        except OSError as exc:
+            # socket.timeout, ConnectionResetError and every other network-level
+            # failure are OSErrors. None of them should reach the user as a traceback.
+            raise TransportError(f"could not reach {url}: {exc}") from exc
         decoded = _decode(raw)
         if status >= 400:
             raise ApiError(status, *_error_fields(status, decoded), body=decoded)

@@ -122,3 +122,51 @@ class TestRender:
 
     def test_renders_plain_scalar(self):
         assert render("hello") == "hello"
+
+
+class TestTransportFailures:
+    """Every failure to reach the API must surface as a message, not a traceback."""
+
+    def test_connection_refused_becomes_a_transport_error(self):
+        from app.cli.client import TransportError, urllib_transport
+
+        config = Config(url="http://127.0.0.1:1", api_key=None)
+        with pytest.raises(TransportError):
+            ApiClient(config, transport=urllib_transport).request("GET", "/v1/projects")
+
+    def test_socket_timeout_becomes_a_transport_error(self):
+        import socket
+
+        from app.cli.client import TransportError
+
+        def transport(*_):
+            raise socket.timeout("timed out")
+
+        with pytest.raises(TransportError):
+            ApiClient(_config(), transport=transport).request("GET", "/v1/x")
+
+    def test_os_error_becomes_a_transport_error(self):
+        from app.cli.client import TransportError
+
+        def transport(*_):
+            raise ConnectionResetError("peer reset")
+
+        with pytest.raises(TransportError):
+            ApiClient(_config(), transport=transport).request("GET", "/v1/x")
+
+    def test_transport_error_names_the_url(self):
+        from app.cli.client import TransportError
+
+        def transport(*_):
+            raise ConnectionResetError("peer reset")
+
+        with pytest.raises(TransportError) as exc:
+            ApiClient(_config(), transport=transport).request("GET", "/v1/x")
+        assert "http://host:1/v1/x" in str(exc.value)
+
+    def test_api_error_is_not_swallowed_as_a_transport_error(self):
+        def transport(*_):
+            return 404, b'{"error": {"code": "TASK_NOT_FOUND", "message": "nope"}}'
+
+        with pytest.raises(ApiError):
+            ApiClient(_config(), transport=transport).request("GET", "/v1/x")

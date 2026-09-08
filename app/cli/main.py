@@ -37,10 +37,18 @@ EXIT_USAGE = 2
 SKILL_FILENAME = "cli-skill.md"
 
 
-def _skill_path() -> Path:
-    """Locate docs/cli-skill.md relative to the installed package."""
-    repo_root = Path(__file__).resolve().parents[2]
-    return repo_root / "docs" / SKILL_FILENAME
+def _skill_path() -> Path | None:
+    """Locate the skill file, whether installed as a wheel or run from a checkout.
+
+    The file ships inside the package as ``app/cli/cli-skill.md`` (packaged data),
+    and ``docs/cli-skill.md`` is the copy people read in the repository. Prefer the
+    packaged one so an installed ``tascade`` does not depend on a source tree.
+    """
+    packaged = Path(__file__).resolve().parent / SKILL_FILENAME
+    if packaged.exists():
+        return packaged
+    checkout = Path(__file__).resolve().parents[2] / "docs" / SKILL_FILENAME
+    return checkout if checkout.exists() else None
 
 
 def _add_argument(parser: argparse.ArgumentParser, arg: Arg) -> None:
@@ -95,6 +103,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.set_defaults(_command=None, json=False)
 
+    parser.set_defaults(_help_parser=parser)
+
     top = parser.add_subparsers(dest="_group", metavar="<group>")
     groups: dict[str, Any] = {}
 
@@ -106,6 +116,8 @@ def build_parser() -> argparse.ArgumentParser:
         group_name, leaf = command.path
         if group_name not in groups:
             group_parser = top.add_parser(group_name, help=f"{group_name} commands")
+            # Without a leaf command, print this group's help rather than the root's.
+            group_parser.set_defaults(_help_parser=group_parser)
             groups[group_name] = group_parser.add_subparsers(
                 dest=f"_{group_name}_command", metavar="<command>"
             )
@@ -160,15 +172,15 @@ def main(argv: list[str] | None = None, transport=None) -> int:
 
     if getattr(namespace, "skill", False):
         path = _skill_path()
-        if not path.exists():
-            print(f"error: skill file not found at {path}", file=sys.stderr)
+        if path is None:
+            print("error: skill file not found in the installed package", file=sys.stderr)
             return EXIT_ERROR
         print(path.read_text(), end="")
         return EXIT_OK
 
     command: Command | None = getattr(namespace, "_command", None)
     if command is None:
-        parser.print_help()
+        getattr(namespace, "_help_parser", parser).print_help()
         return EXIT_USAGE
 
     try:

@@ -218,3 +218,48 @@ class TestInstructions:
 
 def response_text(client: TestClient) -> str:
     return client.get("/v1/instructions").json()["instructions"]
+
+
+class TestTaskContextAcceptsShortIds:
+    """`get_task` resolves a short id, so `context` must resolve it too."""
+
+    def _task(self, client: TestClient, project_id: str) -> dict:
+        phase = client.post(
+            "/v1/phases", json={"project_id": project_id, "name": "P", "sequence": 0}
+        ).json()
+        milestone = client.post(
+            "/v1/milestones",
+            json={"project_id": project_id, "phase_id": phase["id"], "name": "M", "sequence": 0},
+        ).json()
+        return _create_task(client, project_id, milestone["id"], "Short id target")
+
+    def test_context_resolves_a_short_id(self, client: TestClient, project_id: str):
+        task = self._task(client, project_id)
+        assert task["short_id"] == "P1.M1.T1"
+
+        response = client.get(
+            f"/v1/tasks/{task['short_id']}/context", params={"project_id": project_id}
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["task"]["id"] == task["id"]
+
+    def test_context_still_resolves_a_uuid(self, client: TestClient, project_id: str):
+        task = self._task(client, project_id)
+        response = client.get(
+            f"/v1/tasks/{task['id']}/context", params={"project_id": project_id}
+        )
+        assert response.status_code == 200
+        assert response.json()["task"]["id"] == task["id"]
+
+    def test_unknown_short_id_is_still_404(self, client: TestClient, project_id: str):
+        response = client.get(
+            "/v1/tasks/P9.M9.T9/context", params={"project_id": project_id}
+        )
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "TASK_NOT_FOUND"
+
+    def test_short_id_from_another_project_is_404(self, client: TestClient, project_id: str):
+        self._task(client, project_id)
+        other = client.post("/v1/projects", json={"name": "Other"}).json()["id"]
+        response = client.get("/v1/tasks/P1.M1.T1/context", params={"project_id": other})
+        assert response.status_code == 404

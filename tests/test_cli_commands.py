@@ -168,3 +168,102 @@ class TestBooleanAndListEncoding:
         )
         _, query, _ = _split_arguments(command, namespace)
         assert query["capabilities"] == "python,go"
+
+
+class TestArgumentsMatchTheServerContract:
+    """Arguments whose names or requiredness must match the request schemas."""
+
+    def test_gate_decision_sends_the_field_names_the_schema_expects(self):
+        from app.cli.main import _split_arguments
+
+        command = find_command(("gates", "decision-create"))
+        namespace = build_parser().parse_args(
+            [
+                "gates", "decision-create", "--project-id", "p",
+                "--gate-rule-id", "r", "--outcome", "approved",
+                "--actor-id", "reviewer-1", "--reason", "looks good",
+            ]
+        )
+        _, _, body = _split_arguments(command, namespace)
+        assert body["actor_id"] == "reviewer-1"
+        assert body["reason"] == "looks good"
+        assert "decided_by" not in body and "rationale" not in body
+
+    def test_gate_decision_requires_the_fields_the_schema_requires(self):
+        required = {
+            arg.dest for arg in find_command(("gates", "decision-create")).args if arg.required
+        }
+        assert {"project_id", "gate_rule_id", "outcome", "actor_id", "reason"} <= required
+
+    def test_task_state_reason_is_required(self):
+        reason = next(
+            arg for arg in find_command(("tasks", "state")).args if arg.dest == "reason"
+        )
+        assert reason.required, "the server rejects a transition with no reason"
+
+    def test_integration_result_help_names_the_real_outcomes(self):
+        result = next(
+            arg for arg in find_command(("tasks", "integrations-result")).args
+            if arg.dest == "result"
+        )
+        assert "failed_checks" in result.help
+        assert "failure" not in result.help
+
+
+class TestGroupHelp:
+    def test_bare_group_prints_that_group_and_not_the_top_level(self, capsys):
+        assert main(["tasks"]) == 2
+        out = capsys.readouterr().out
+        assert "artifacts-create" in out, "expected the tasks group's own commands"
+        assert "milestones" not in out, "printed the top-level help instead"
+
+    def test_bare_invocation_still_prints_the_top_level_help(self, capsys):
+        assert main([]) == 2
+        assert "milestones" in capsys.readouterr().out
+
+
+class TestSkillFileAccuracy:
+    def test_skill_file_does_not_name_a_nonexistent_integration_result(self):
+        from pathlib import Path
+
+        text = (Path(__file__).resolve().parents[1] / "docs" / "cli-skill.md").read_text()
+        assert "failed_checks" in text
+        assert "success|conflict|failure" not in text
+
+
+class TestPackagedSkillFile:
+    """The skill file ships inside the package and is read from there once installed."""
+
+    def test_the_packaged_copy_matches_the_documented_one(self):
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[1]
+        packaged = root / "app" / "cli" / "cli-skill.md"
+        documented = root / "docs" / "cli-skill.md"
+        assert packaged.exists(), "the skill file must ship inside the package"
+        assert packaged.read_text() == documented.read_text(), (
+            "app/cli/cli-skill.md and docs/cli-skill.md have drifted"
+        )
+
+    def test_skill_lookup_prefers_the_packaged_copy(self):
+        from app.cli.main import _skill_path
+
+        assert _skill_path() == Path(__file__).resolve().parents[1] / "app" / "cli" / "cli-skill.md"
+
+    def test_skill_lookup_reports_absence_instead_of_raising(self, monkeypatch, capsys):
+        import app.cli.main as cli_main
+
+        monkeypatch.setattr(cli_main, "_skill_path", lambda: None)
+        assert cli_main.main(["--skill"]) == 1
+        assert "not found" in capsys.readouterr().err
+
+    def test_package_data_declares_the_skill_file(self):
+        import tomllib
+        from pathlib import Path
+
+        pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+        with pyproject.open("rb") as handle:
+            config = tomllib.load(handle)
+        assert config["build-system"]["build-backend"] == "setuptools.build_meta"
+        assert config["tool"]["setuptools"]["package-data"]["app.cli"] == ["cli-skill.md"]
+        assert config["project"]["scripts"]["tascade"] == "app.cli.main:main"

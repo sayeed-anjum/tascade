@@ -559,10 +559,27 @@ def get_task_context(
     auth: AuthContext = Depends(get_auth_context),
 ) -> TaskContextResponse:
     require_role("get_task_context", auth, target_project_id=project_id)
+    # Accept a short id here too, because GET /v1/tasks/{task_id} does.
+    try:
+        referenced = STORE.get_task(task_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=ErrorResponse(
+                error={"code": "TASK_REF_AMBIGUOUS", "message": str(exc), "retryable": False}
+            ).model_dump(),
+        )
+    if referenced is None:
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error={"code": "TASK_NOT_FOUND", "message": "Task not found", "retryable": False}
+            ).model_dump(),
+        )
     try:
         context = STORE.get_task_context(
             project_id=project_id,
-            task_id=task_id,
+            task_id=referenced["id"],
             ancestor_depth=ancestor_depth,
             dependent_depth=dependent_depth,
         )
