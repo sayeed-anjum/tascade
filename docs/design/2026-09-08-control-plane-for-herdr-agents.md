@@ -294,6 +294,13 @@ truth for what is alive in its VMs. None writes another's state.
 
 The join is a naming discipline: a Herdr pane running task work is named by
 the task short id, a Slicer VM carries the task short id as a metadata tag.
+Herdr agent names must be lowercase and may contain only letters, digits,
+dashes, and underscores, so the short id is mapped by lowercasing and
+replacing dots with dashes: `P1.M1.T1` becomes `p1-m1-t1`. The mapping is
+one-to-one and reversible; the worktree path and label keep the original
+form. The lease id goes in the pane's display metadata until the agent
+session field can carry it without fighting the harness hook, which sets
+that field to the harness's own session id.
 The pool daemon applies this automatically at launch. Role agents apply it at
 claim time. Drift in either direction is then detectable and is reported by
 the brief.
