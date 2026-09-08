@@ -218,7 +218,7 @@ tables.
 No free-text status field is added. Status is the state machine. Free-text
 status is how trackers become fiction.
 
-### D5. Operational runs are a task class with a step list
+### D5. Operational runs are a task class; the step engine is deferred
 
 A deploy, a backfill, or a migration is not a work item with a single
 backlog-to-integrated lifecycle. It is a sequence of steps whose individual
@@ -471,7 +471,7 @@ For role agents that need real credentials to do their job, such as a deploy
 agent, the sandbox is isolation rather than distrust, and the same push-from-
 inside shape applies.
 
-### D11. Two views, both derived
+### D11. Two views, both derived; the brief first
 
 **The brief** is a terminal command for a returning human, built entirely from
 derived state. Slice 1 ships it local-only: everything below that comes from
